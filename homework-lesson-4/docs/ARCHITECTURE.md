@@ -40,7 +40,7 @@ Source file: `src/agent/types.ts`.
 
 1. `main.ts` receives user input.
 2. `runAgentTurn(...)` appends a user message to session memory.
-3. `llm-client` receives `messages` (+ tool schemas) and returns an `assistantMessage` (optionally with `assistantMessage.toolCalls`).
+3. `llm-client` sends `messages` + JSON Schema tools to the provider API (`tool_choice: "auto"`) and returns an `assistantMessage` (optionally with `assistantMessage.toolCalls`).
 4. `tool-dispatcher` resolves and executes tools via `tools/index.ts`.
 5. Tool execution results are normalized and appended to `messages` as role `tool` messages.
 6. The loop continues until final answer or `MAX_ITERATIONS`.
@@ -67,8 +67,11 @@ Source file: `src/agent/types.ts`.
 - `write_report` persists files to `output/`.
 
 ### Block 2: LLM Client Integration
-- A real API call path is operational.
-- `tool_calls` and final responses are reliably mapped to `LlmTurnResult`.
+- A real provider API call path is operational (`src/agent/llm-client.ts`).
+- `messages` and `tools` are sent in a single API request.
+- Provider responses are normalized to internal `LlmTurnResult` (`assistant text` + validated `tool_calls`).
+- An adapter layer (`src/agent/llm-adapter.ts`) isolates raw provider payload parsing from client transport logic.
+- API error handling covers rate limits, connection failures/timeouts, and invalid response shape.
 
 ### Block 3: ReAct Loop Core
 - End-to-end loop `LLM -> tools -> LLM` is functional.

@@ -12,6 +12,7 @@ chmod +x homework-lesson-4/scripts/check-architecture-invariants.sh
 chmod +x homework-lesson-4/scripts/run-block-validation.sh
 chmod +x homework-lesson-4/scripts/smoke-block-0.sh
 chmod +x homework-lesson-4/scripts/smoke-block-1.sh
+chmod +x homework-lesson-4/scripts/smoke-block-2.sh
 chmod +x homework-lesson-4/scripts/smoke-block-placeholder.sh
 
 git config core.hooksPath .githooks

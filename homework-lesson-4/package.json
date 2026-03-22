@@ -12,7 +12,7 @@
     "block:check": "bash scripts/run-block-validation.sh",
     "smoke:block:0": "bash scripts/smoke-block-0.sh",
     "smoke:block:1": "bash scripts/smoke-block-1.sh",
-    "smoke:block:2": "bash scripts/smoke-block-placeholder.sh block-2",
+    "smoke:block:2": "bash scripts/smoke-block-2.sh",
     "smoke:block:3": "bash scripts/smoke-block-placeholder.sh block-3",
     "smoke:block:4": "bash scripts/smoke-block-placeholder.sh block-4",
     "smoke:block:5": "bash scripts/smoke-block-placeholder.sh block-5",
@@ -27,7 +27,8 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "dotenv": "^16.6.1",
-    "jsdom": "^29.0.1"
+    "jsdom": "^29.0.1",
+    "openai": "^6.32.0"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.1",
