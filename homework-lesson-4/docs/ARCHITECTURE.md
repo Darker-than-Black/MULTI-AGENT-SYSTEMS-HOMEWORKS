@@ -42,7 +42,7 @@ Source file: `src/agent/types.ts`.
 2. `runAgentTurn(...)` appends a user message to session memory.
 3. `llm-client` sends `messages` + JSON Schema tools to the provider API (`tool_choice: "auto"`) and returns an `assistantMessage` (optionally with `assistantMessage.toolCalls`).
 4. `tool-dispatcher` resolves and executes tools via `tools/index.ts`.
-5. Tool execution results are normalized and appended to `messages` as role `tool` messages.
+5. Tool execution results are normalized and appended to `messages` as canonical role `tool` messages.
 6. The loop continues until final answer or `MAX_ITERATIONS`.
 7. `main.ts` outputs the final assistant response.
 
@@ -76,7 +76,12 @@ Source file: `src/agent/types.ts`.
 ### Block 3: ReAct Loop Core
 - End-to-end loop `LLM -> tools -> LLM` is functional.
 - `MAX_ITERATIONS` guardrail is enforced.
+- Explicit stop conditions prevent infinite loops (e.g., repeated identical tool-call plans).
 - At least one scenario demonstrates 3-5+ tool calls in a single request.
+- Loop termination is deterministic: final answer fallback is provided even when assistant text is empty.
+- Block validation includes:
+  - static guardrail checks for loop limit and anti-loop stop conditions,
+  - an optional live multi-step scenario when API credentials are available.
 
 ### Block 4: Memory + Interactive CLI
 - Interactive multi-turn CLI is functional.

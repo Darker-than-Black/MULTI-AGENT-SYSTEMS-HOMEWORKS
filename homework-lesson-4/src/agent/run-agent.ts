@@ -5,38 +5,80 @@ import type { RunAgentTurnInput, RunAgentTurnOutput } from "./types.js";
 import { logIteration, logToolCall, logToolResult } from "../utils/logger.js";
 
 export async function runAgentTurn(
-  input: RunAgentTurnInput,
+  { maxIterations, memory, userInput }: RunAgentTurnInput,
 ): Promise<RunAgentTurnOutput> {
-  const messages = input.memory;
-  appendUserMessage(messages, input.userInput);
+  appendUserMessage(memory, userInput);
 
-  let finalAnswer = "No response generated.";
+  let finalAnswer = "";
+  let lastNonEmptyAssistantText = "";
   let iterations = 0;
+  let noProgressStreak = 0;
+  let previousToolPlanFingerprint = "";
 
-  while (iterations < input.maxIterations) {
+  while (iterations < maxIterations) {
     iterations += 1;
     logIteration(iterations);
 
-    const llmResult = await requestLlmTurn({ messages });
+    const llmResult = await requestLlmTurn({ messages: memory });
+    const assistantText = llmResult.assistantMessage.content.trim();
     const toolCalls = llmResult.assistantMessage.toolCalls ?? [];
-    appendAssistantMessage(messages, llmResult.assistantMessage.content, toolCalls);
+
+    if (assistantText) {
+      lastNonEmptyAssistantText = assistantText;
+    }
+
+    appendAssistantMessage(memory, assistantText, toolCalls);
 
     if (toolCalls.length === 0) {
-      finalAnswer = llmResult.assistantMessage.content;
+      if (!assistantText && !lastNonEmptyAssistantText) {
+        finalAnswer = "Agent returned an empty response.";
+      } else {
+        finalAnswer = assistantText || lastNonEmptyAssistantText;
+      }
       break;
     }
 
+    const toolPlanFingerprint = toolCalls
+      .map((toolCall) => `${toolCall.function.name}:${toolCall.function.arguments}`)
+      .join("|");
+
+    if (toolPlanFingerprint && toolPlanFingerprint === previousToolPlanFingerprint) {
+      noProgressStreak += 1;
+    } else {
+      noProgressStreak = 0;
+    }
+
+    previousToolPlanFingerprint = toolPlanFingerprint;
+
+    if (noProgressStreak >= 2) {
+      finalAnswer = lastNonEmptyAssistantText || "Stopped early: repeated tool-call plan without progress.";
+      break;
+    }
+
+    let executedAnyTool = false;
     for (const toolCall of toolCalls) {
       logToolCall(toolCall.function.name, toolCall.function.arguments);
       const result = await executeToolCall(toolCall);
       logToolResult(result.toolName, result.ok, result.output);
-      messages.push(result.toolMessage);
+      memory.push(result.toolMessage);
+      executedAnyTool = true;
+    }
+
+    if (!executedAnyTool) {
+      finalAnswer = lastNonEmptyAssistantText || "Stopped early: no tool calls were executed.";
+      break;
     }
   }
 
-  if (iterations >= input.maxIterations) {
-    finalAnswer = "Iteration limit reached.";
+  if (!finalAnswer) {
+    if (iterations >= maxIterations) {
+      finalAnswer = lastNonEmptyAssistantText
+        ? `${lastNonEmptyAssistantText}\n\n[Stopped: iteration limit reached.]`
+        : "Iteration limit reached before producing a final answer.";
+    } else {
+      finalAnswer = "No final answer was produced.";
+    }
   }
 
-  return { finalAnswer, messages, iterations };
+  return { finalAnswer, messages: memory, iterations };
 }
