@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+bash homework-lesson-4/scripts/check-architecture-sync.sh --staged
+bash homework-lesson-4/scripts/check-architecture-invariants.sh
