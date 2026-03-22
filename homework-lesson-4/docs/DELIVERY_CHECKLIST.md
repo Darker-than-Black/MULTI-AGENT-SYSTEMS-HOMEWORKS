@@ -61,6 +61,6 @@ npm run block:check -- 0
 ## Explicit Code Review Invariant Checks
 
 During code review, verify and annotate these items explicitly:
-- [ ] ReAct loop control remains only in `src/agent/run-agent.ts`.
+- [ ] ReAct loop control remains only in `src/agent/run-agent.ts` (REPL loop in `src/main.ts` is expected).
 - [ ] `src/tools/*` remains decoupled from direct LLM execution concerns.
 - [ ] `src/agent/tool-dispatcher.ts` remains the single tool execution entrypoint.

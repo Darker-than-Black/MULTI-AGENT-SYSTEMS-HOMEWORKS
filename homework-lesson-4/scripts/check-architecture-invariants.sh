@@ -7,12 +7,13 @@ cd "$REPO_ROOT"
 
 TARGET_DIR="homework-lesson-4/src"
 RUN_AGENT_FILE="homework-lesson-4/src/agent/run-agent.ts"
+MAIN_FILE="homework-lesson-4/src/main.ts"
 DISPATCHER_FILE="homework-lesson-4/src/agent/tool-dispatcher.ts"
 
-echo "[invariants] Checking: ReAct loop control only in run-agent.ts"
-LOOP_MATCHES="$(grep -RInE '\b(while|for)\s*\(' "$TARGET_DIR" --include='*.ts' | grep -v "^${RUN_AGENT_FILE}:" || true)"
+echo "[invariants] Checking: ReAct loop control in run-agent.ts and CLI loop in main.ts only"
+LOOP_MATCHES="$(grep -RInE '\b(while|for)\s*\(' "$TARGET_DIR" --include='*.ts' | grep -v "^${RUN_AGENT_FILE}:" | grep -v "^${MAIN_FILE}:" || true)"
 if [[ -n "$LOOP_MATCHES" ]]; then
-  echo "Invariant violation: loop constructs found outside ${RUN_AGENT_FILE}"
+  echo "Invariant violation: loop constructs found outside ${RUN_AGENT_FILE} and ${MAIN_FILE}"
   echo "$LOOP_MATCHES"
   exit 1
 fi

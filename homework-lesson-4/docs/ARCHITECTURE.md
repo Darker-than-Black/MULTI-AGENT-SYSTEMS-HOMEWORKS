@@ -86,6 +86,8 @@ Source file: `src/agent/types.ts`.
 ### Block 4: Memory + Interactive CLI
 - Interactive multi-turn CLI is functional.
 - In-session conversational memory is preserved across turns.
+- Session memory is managed explicitly via `src/agent/memory.ts` (`createSessionMemory` + append helpers).
+- Memory budget guardrails are enforced (message count + per-message content truncation).
 
 ### Block 5: Prompt Engineering
 - System prompt is upgraded with explicit role, structured directives, and behavioral constraints.

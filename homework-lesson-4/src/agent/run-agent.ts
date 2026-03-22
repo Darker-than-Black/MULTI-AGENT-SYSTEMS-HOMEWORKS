@@ -1,4 +1,4 @@
-import { appendAssistantMessage, appendUserMessage } from "./memory.js";
+import { appendAssistantMessage, appendToolMessage, appendUserMessage } from "./memory.js";
 import { requestLlmTurn } from "./llm-client.js";
 import { executeToolCall } from "./tool-dispatcher.js";
 import type { RunAgentTurnInput, RunAgentTurnOutput } from "./types.js";
@@ -60,7 +60,7 @@ export async function runAgentTurn(
       logToolCall(toolCall.function.name, toolCall.function.arguments);
       const result = await executeToolCall(toolCall);
       logToolResult(result.toolName, result.ok, result.output);
-      memory.push(result.toolMessage);
+      appendToolMessage(memory, result.toolMessage);
       executedAnyTool = true;
     }
 
