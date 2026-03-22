@@ -1,5 +1,5 @@
 import { SYSTEM_PROMPT } from "./prompt.js";
-import type { AgentMessage } from "./types.js";
+import type { AgentMessage, ToolCall } from "./types.js";
 
 export function createInitialMemory(): AgentMessage[] {
   return [{ role: "system", content: SYSTEM_PROMPT.trim() }];
@@ -16,7 +16,12 @@ export function appendUserMessage(
 export function appendAssistantMessage(
   messages: AgentMessage[],
   content: string,
+  toolCalls?: ToolCall[],
 ): AgentMessage[] {
-  messages.push({ role: "assistant", content });
+  const message =
+    toolCalls && toolCalls.length > 0
+      ? { role: "assistant" as const, content, toolCalls }
+      : { role: "assistant" as const, content };
+  messages.push(message);
   return messages;
 }

@@ -21,9 +21,15 @@ This document defines the target minimal architecture for `homework-lesson-4` (T
 
 The following types define the canonical system contract:
 
-- `AgentMessage`
-- `ToolCall`
-- `ToolExecutionResult`
+- `AgentMessage` (discriminated union):
+  - `system`: `{ role: "system", content }`
+  - `user`: `{ role: "user", content }`
+  - `assistant`: `{ role: "assistant", content, toolCalls? }`
+  - `tool`: `{ role: "tool", name, toolCallId, content, isError? }`
+- `ToolCall` (function tool call payload):
+  - `{ id, type: "function", function: { name, arguments } }`
+- `ToolExecutionResult`:
+  - `{ toolCallId, toolName, ok, output, toolMessage }`
 - `LlmTurnResult`
 - `RunAgentTurnInput`
 - `RunAgentTurnOutput`
@@ -34,9 +40,9 @@ Source file: `src/agent/types.ts`.
 
 1. `main.ts` receives user input.
 2. `runAgentTurn(...)` appends a user message to session memory.
-3. `llm-client` receives `messages` (+ tool schemas) and returns `assistantMessage` and/or `toolCalls`.
+3. `llm-client` receives `messages` (+ tool schemas) and returns an `assistantMessage` (optionally with `assistantMessage.toolCalls`).
 4. `tool-dispatcher` resolves and executes tools via `tools/index.ts`.
-5. Tool execution results are appended to `messages` with role `tool`.
+5. Tool execution results are normalized and appended to `messages` as role `tool` messages.
 6. The loop continues until final answer or `MAX_ITERATIONS`.
 7. `main.ts` outputs the final assistant response.
 

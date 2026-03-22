@@ -1,21 +1,8 @@
 import { appendAssistantMessage, appendUserMessage } from "./memory.js";
 import { requestLlmTurn } from "./llm-client.js";
 import { executeToolCall } from "./tool-dispatcher.js";
-import type { AgentMessage, RunAgentTurnInput, RunAgentTurnOutput } from "./types.js";
+import type { RunAgentTurnInput, RunAgentTurnOutput } from "./types.js";
 import { logIteration, logToolCall, logToolResult } from "../utils/logger.js";
-
-function toToolMessage(result: {
-  toolCallId: string;
-  toolName: string;
-  content: string;
-}): AgentMessage {
-  return {
-    role: "tool",
-    name: result.toolName,
-    toolCallId: result.toolCallId,
-    content: result.content,
-  };
-}
 
 export async function runAgentTurn(
   input: RunAgentTurnInput,
@@ -31,18 +18,19 @@ export async function runAgentTurn(
     logIteration(iterations);
 
     const llmResult = await requestLlmTurn({ messages });
-    appendAssistantMessage(messages, llmResult.assistantMessage.content);
+    const toolCalls = llmResult.assistantMessage.toolCalls ?? [];
+    appendAssistantMessage(messages, llmResult.assistantMessage.content, toolCalls);
 
-    if (llmResult.isFinal || llmResult.toolCalls.length === 0) {
+    if (toolCalls.length === 0) {
       finalAnswer = llmResult.assistantMessage.content;
       break;
     }
 
-    for (const toolCall of llmResult.toolCalls) {
-      logToolCall(toolCall.name, toolCall.argumentsJson);
+    for (const toolCall of toolCalls) {
+      logToolCall(toolCall.function.name, toolCall.function.arguments);
       const result = await executeToolCall(toolCall);
-      logToolResult(result.toolName, result.success, result.content);
-      messages.push(toToolMessage(result));
+      logToolResult(result.toolName, result.ok, result.output);
+      messages.push(result.toolMessage);
     }
   }
 

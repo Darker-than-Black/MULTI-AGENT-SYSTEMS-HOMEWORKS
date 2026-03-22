@@ -1,22 +1,18 @@
+import { OPENAI_API_KEY } from "../config/env.js";
 import type { AgentMessage, LlmTurnResult } from "./types.js";
 
 export interface LlmRequest {
   messages: AgentMessage[];
 }
 
-// Mock client for project scaffolding.
 export async function requestLlmTurn(input: LlmRequest): Promise<LlmTurnResult> {
-  const lastUserMessage = [...input.messages]
-    .reverse()
-    .find((message) => message.role === "user");
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is missing. Configure .env before running agent.");
+  }
 
-  const content = lastUserMessage
-    ? `Mock response for: ${lastUserMessage.content}`
-    : "Mock response.";
+  if (input.messages.length === 0) {
+    throw new Error("LLM request requires at least one message.");
+  }
 
-  return {
-    assistantMessage: { role: "assistant", content },
-    toolCalls: [],
-    isFinal: true,
-  };
+  throw new Error("LLM client integration is not implemented yet.");
 }

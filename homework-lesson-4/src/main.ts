@@ -9,16 +9,22 @@ async function main(): Promise<void> {
     process.argv.slice(2).join(" ").trim() ||
     "Поясни різницю між naive RAG та sentence-window retrieval.";
 
-  const response = await runAgentTurn({
-    userInput,
-    memory,
-    maxIterations: MAX_ITERATIONS,
-  });
+  try {
+    const response = await runAgentTurn({
+      userInput,
+      memory,
+      maxIterations: MAX_ITERATIONS,
+    });
 
-  console.log(response.finalAnswer);
+    console.log(response.finalAnswer);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown application error.";
+    console.error(`Application warning: ${message}`);
+    console.error(
+      "Next step: implement src/agent/llm-client.ts integration with your LLM provider.",
+    );
+  }
 }
 
-main().catch((error: unknown) => {
-  console.error("Application error:", error);
-  process.exitCode = 1;
-});
+main();

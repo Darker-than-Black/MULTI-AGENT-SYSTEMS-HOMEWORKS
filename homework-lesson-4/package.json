@@ -11,7 +11,7 @@
     "invariant:check": "bash scripts/check-architecture-invariants.sh",
     "block:check": "bash scripts/run-block-validation.sh",
     "smoke:block:0": "bash scripts/smoke-block-0.sh",
-    "smoke:block:1": "bash scripts/smoke-block-placeholder.sh block-1",
+    "smoke:block:1": "bash scripts/smoke-block-1.sh",
     "smoke:block:2": "bash scripts/smoke-block-placeholder.sh block-2",
     "smoke:block:3": "bash scripts/smoke-block-placeholder.sh block-3",
     "smoke:block:4": "bash scripts/smoke-block-placeholder.sh block-4",
@@ -25,9 +25,12 @@
     "node": ">=20"
   },
   "dependencies": {
-    "dotenv": "^16.6.1"
+    "@mozilla/readability": "^0.6.0",
+    "dotenv": "^16.6.1",
+    "jsdom": "^29.0.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.1",
     "@types/node": "^24.6.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"

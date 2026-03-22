@@ -20,7 +20,12 @@ export const webSearchSchema: ToolSchema = {
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query." },
+        query: {
+          type: "string",
+          description: "Search query.",
+          minLength: 1,
+          maxLength: 500,
+        },
       },
       required: ["query"],
       additionalProperties: false,
@@ -36,7 +41,13 @@ export const readUrlSchema: ToolSchema = {
     parameters: {
       type: "object",
       properties: {
-        url: { type: "string", description: "URL to read." },
+        url: {
+          type: "string",
+          description: "Absolute HTTP/HTTPS URL to read.",
+          minLength: 1,
+          format: "uri",
+          pattern: "^https?://",
+        },
       },
       required: ["url"],
       additionalProperties: false,
@@ -52,8 +63,17 @@ export const writeReportSchema: ToolSchema = {
     parameters: {
       type: "object",
       properties: {
-        filename: { type: "string", description: "Report file name." },
-        content: { type: "string", description: "Markdown report content." },
+        filename: {
+          type: "string",
+          description: "Report file name (markdown).",
+          minLength: 1,
+          maxLength: 255,
+        },
+        content: {
+          type: "string",
+          description: "Markdown report content.",
+          minLength: 1,
+        },
       },
       required: ["filename", "content"],
       additionalProperties: false,
