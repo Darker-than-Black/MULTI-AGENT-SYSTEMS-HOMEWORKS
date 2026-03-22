@@ -11,7 +11,6 @@ from tools import write_report
 settings = Settings()
 THREAD_ID = "research-cli-session"
 
-
 def _spinner(stop_event: threading.Event, label: str = "System: Processing"):
     for frame in itertools.cycle("|/-\\"):
         if stop_event.is_set():
@@ -22,11 +21,9 @@ def _spinner(stop_event: threading.Event, label: str = "System: Processing"):
     sys.stdout.write("\r" + " " * 60 + "\r")
     sys.stdout.flush()
 
-
 def _clear_spinner_line():
     sys.stdout.write("\r" + " " * 60 + "\r")
     sys.stdout.flush()
-
 
 def main():
     print("Research Agent (type 'exit' to quit)")

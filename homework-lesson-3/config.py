@@ -1,7 +1,6 @@
 from pydantic import SecretStr, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 class Settings(BaseSettings):
     api_key: SecretStr = Field(validation_alias="OPENAI_API_KEY")
     model_name: str = Field(validation_alias="MODEL_NAME")
