@@ -6,6 +6,7 @@ import { runAgentTurn } from "./agent/run-agent.js";
 import type { AgentMessage } from "./agent/types.js";
 import { MAX_ITERATIONS } from "./config/env.js";
 import { writeReport } from "./tools/write-report.js";
+import { buildDatedReportFilename } from "./utils/filenames.js";
 
 async function main(): Promise<void> {
   const sessionMemory = createSessionMemory();
@@ -46,8 +47,12 @@ async function main(): Promise<void> {
             .toLowerCase();
 
           if (["yes", "y"].includes(saveAnswer)) {
-            const filenameInput = (await cli.question("Report filename (default: cli_report.md): ")).trim();
-            const filename = filenameInput || "cli_report.md";
+            const filenameInput = (
+              await cli.question(
+                "Optional filename suffix (default uses date only): ",
+              )
+            ).trim();
+            const filename = buildDatedReportFilename(filenameInput);
 
             try {
               const saveResult = await writeReport({ filename, content: response.finalAnswer });

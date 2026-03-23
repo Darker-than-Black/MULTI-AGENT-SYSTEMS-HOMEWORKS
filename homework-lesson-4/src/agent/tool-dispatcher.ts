@@ -53,11 +53,24 @@ export async function executeToolCall(
   try {
     let args: Record<string, unknown>;
     try {
-      args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
-    } catch {
-      throw new ToolInputError(
-        `${toolName}: invalid JSON arguments payload.`,
-      );
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(toolCall.function.arguments) as unknown;
+      } catch {
+        throw new ToolInputError(
+          `${toolName}: invalid JSON arguments payload.`,
+        );
+      }
+
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new ToolInputError(`${toolName}: arguments payload must be a JSON object.`);
+      }
+      args = parsed as Record<string, unknown>;
+    } catch (error: unknown) {
+      if (error instanceof ToolInputError) {
+        throw error;
+      }
+      throw new ToolInputError(`${toolName}: invalid arguments payload.`);
     }
 
     const output = await tool.execute(args);

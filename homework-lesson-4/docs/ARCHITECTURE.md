@@ -88,15 +88,25 @@ Source file: `src/agent/types.ts`.
 - In-session conversational memory is preserved across turns.
 - Session memory is managed explicitly via `src/agent/memory.ts` (`createSessionMemory` + append helpers).
 - Memory budget guardrails are enforced (message count + per-message content truncation).
+- CLI fallback report naming uses a date-first convention:
+  - default: `YYYY-MM-DD_HH-mm-ss.md`
+  - with user suffix: `YYYY-MM-DD_HH-mm-ss-{USER_FILENAME}.md`
 
 ### Block 5: Prompt Engineering
 - System prompt is upgraded with explicit role, structured directives, and behavioral constraints.
 - Tool-usage quality is measurably improved vs. baseline prompt.
+- Prompt includes compact few-shot behavior examples for tool-first execution.
 
 ### Block 6: Hardening + E2E Validation
 - Step-level logging is complete and readable.
+- Logs include iteration number, tool name, arguments, and result/error preview.
 - Error handling prevents unhandled crashes.
 - End-to-end scenario completes with report generation in `output/`.
+- Edge cases are handled and validated:
+  - invalid tool arguments,
+  - failed URL reads,
+  - empty/weak search results,
+  - LLM API timeout mapping.
 
 ## 6) Document Maintenance Rule
 

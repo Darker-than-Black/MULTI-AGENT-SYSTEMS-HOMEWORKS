@@ -8,3 +8,28 @@ export function toSafeReportFilename(input: string): string {
 
   return withExtension || "report.md";
 }
+
+export function buildDatedReportFilename(optionalUserFilename: string): string {
+  const datePrefix = buildTimestampPrefix(new Date());
+  const userPart = normalizeUserFilename(optionalUserFilename);
+
+  if (!userPart) {
+    return `${datePrefix}.md`;
+  }
+
+  return toSafeReportFilename(`${datePrefix}-${userPart}`);
+}
+
+function buildTimestampPrefix(date: Date): string {
+  return date.toJSON().replace("T", "_").replace(/:/g, "-").replace(/\.\d{3}Z$/, "");
+}
+
+function normalizeUserFilename(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const sanitized = trimmed.replace(SAFE_CHARS_REGEX, "_");
+  return sanitized.replace(/\.md$/i, "").replace(/^[-_.]+|[-_.]+$/g, "");
+}

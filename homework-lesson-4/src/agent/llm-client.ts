@@ -6,7 +6,7 @@ import {
   APIError,
   RateLimitError,
 } from "openai";
-import { MODEL_NAME, OPENAI_API_KEY } from "../config/env.js";
+import {MODEL_NAME, OPENAI_API_KEY, TEMPERATURE} from "../config/env.js";
 import { toolSchemas } from "../tools/schemas.js";
 import { adaptProviderAssistantMessage } from "./llm-adapter.js";
 import type { AgentMessage, LlmTurnResult } from "./types.js";
@@ -32,7 +32,7 @@ export async function requestLlmTurn(input: LlmRequest): Promise<LlmTurnResult> 
       messages: toOpenAiMessages(input.messages),
       tools: toolSchemas,
       tool_choice: "auto",
-      temperature: 0.2,
+      temperature: TEMPERATURE,
     });
 
     const message = response.choices[0]?.message;

@@ -17,7 +17,7 @@ export async function runAgentTurn(
 
   while (iterations < maxIterations) {
     iterations += 1;
-    logIteration(iterations);
+    logIteration(iterations, maxIterations);
 
     const llmResult = await requestLlmTurn({ messages: memory });
     const assistantText = llmResult.assistantMessage.content.trim();
@@ -57,9 +57,9 @@ export async function runAgentTurn(
 
     let executedAnyTool = false;
     for (const toolCall of toolCalls) {
-      logToolCall(toolCall.function.name, toolCall.function.arguments);
+      logToolCall(toolCall.function.name, toolCall.function.arguments, iterations);
       const result = await executeToolCall(toolCall);
-      logToolResult(result.toolName, result.ok, result.output);
+      logToolResult(result.toolName, result.ok, result.output, iterations);
       appendToolMessage(memory, result.toolMessage);
       executedAnyTool = true;
     }

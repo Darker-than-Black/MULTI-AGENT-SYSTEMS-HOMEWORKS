@@ -15,6 +15,8 @@ chmod +x homework-lesson-4/scripts/smoke-block-1.sh
 chmod +x homework-lesson-4/scripts/smoke-block-2.sh
 chmod +x homework-lesson-4/scripts/smoke-block-3.sh
 chmod +x homework-lesson-4/scripts/smoke-block-4.sh
+chmod +x homework-lesson-4/scripts/smoke-block-5.sh
+chmod +x homework-lesson-4/scripts/smoke-block-6.sh
 chmod +x homework-lesson-4/scripts/smoke-block-placeholder.sh
 
 git config core.hooksPath .githooks
