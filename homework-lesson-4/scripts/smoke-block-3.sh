@@ -22,7 +22,7 @@ if ! grep -q "Stopped early: repeated tool-call plan without progress." "$RUN_AG
   exit 1
 fi
 
-if ! grep -q "Do not repeat the exact same tool call plan" "$PROMPT_FILE"; then
+if ! grep -q "Do not repeat identical tool arguments" "$PROMPT_FILE"; then
   echo "Missing anti-loop prompt constraint in prompt.ts"
   exit 1
 fi

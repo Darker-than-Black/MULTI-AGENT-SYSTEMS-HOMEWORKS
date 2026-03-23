@@ -3,10 +3,16 @@
 set -euo pipefail
 
 echo "[smoke:block:0] Running CLI bootstrap check..."
-OUTPUT="$(npm run dev -- "Architecture smoke test" 2>&1)"
+OUTPUT="$(printf 'quit\n' | npm run dev 2>&1)"
 
-if ! echo "$OUTPUT" | grep -q "Application warning: .*LLM client integration is not implemented yet\\|Application warning: .*OPENAI_API_KEY is missing"; then
-  echo "Smoke validation failed: expected graceful bootstrap warning."
+if ! echo "$OUTPUT" | grep -q "Research Agent CLI"; then
+  echo "Smoke validation failed: CLI header not found."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+if ! echo "$OUTPUT" | grep -q "Type your question, or 'exit'/'quit' to stop."; then
+  echo "Smoke validation failed: CLI usage hint not found."
   echo "$OUTPUT"
   exit 1
 fi
