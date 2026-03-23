@@ -1,63 +1,129 @@
-# Завдання: Research Agent з власним ReAct Loop
+# Homework Lesson 4 (TypeScript): Multi-Agent ReAct System
 
-Розширте свого Research Agent з homework-lesson-3 — **замініть `create_react_agent` на власну реалізацію ReAct-циклу** та **покращіть system prompt**, застосувавши техніки промптингу з лекції.
+This project was implemented **from scratch in TypeScript** as an alternative to the Python version from previous homework.  
+The core is a custom ReAct loop (`LLM -> tool calls -> tool results -> LLM`) with structured messages, JSON Schema-based tools, and interactive CLI execution.
 
-**Мета:** зрозуміти, як працює ReAct loop зсередини — без "магії" фреймворків — та навчитися писати ефективні промпти, які суттєво впливають на поведінку агента.
+## Implemented Scope
 
----
+- ReAct loop engine with stop conditions and iteration limits.
+- Multi-turn CLI with in-memory session context.
+- Real tools:
+  - `web_search`
+  - `read_url`
+  - `write_report`
+  - `github_list_directory` (code review helper for a target repository path)
+  - `github_get_file_content` (read file content from a target repository path)
+- Unified tool schema contracts and tool-level argument validation.
+- Report generation to `output/` with date-based file names.
 
-### Що змінюється порівняно з homework-lesson-3
+## Project Setup
 
-| homework-lesson-3 | homework-lesson-4 |
-|---|---|
-| `create_react_agent` з LangChain | Власна реалізація ReAct loop |
-| LangChain керує циклом tool calling | Ви самі керуєте циклом |
-| Фреймворк парсить відповіді LLM | Ви самі обробляєте `tool_calls` з відповіді API |
-| `MemorySaver` для памʼяті | Ви самі керуєте списком `messages` |
-| `@tool` декоратор LangChain | Tools описані як JSON Schema для API |
-| Базовий system prompt | Покращений prompt із застосуванням технік промптингу |
+Requirements:
 
----
+- Node.js `>=20`
+- npm `>=10`
 
-### Що потрібно реалізувати
+Install:
 
-1. **Власний ReAct Loop** — замініть `create_react_agent` на власний цикл, який відправляє повідомлення в LLM API з tool definitions, обробляє відповідь, виконує tool calls, і повторює до фінальної відповіді
-2. **Tools як JSON Schema** — опишіть tools (`web_search`, `read_url`, `write_report`) у форматі tool calling API вашого провайдера замість `@tool` декоратора LangChain
-3. **Памʼять діалогу** — реалізуйте збереження контексту між запитами без `MemorySaver`
-4. **System Prompt** — напишіть осмислений system prompt, що керує поведінкою агента. Експериментуйте з формулюваннями — це і є промпт-інжиніринг на практиці
-5. **Логування кроків** — виводьте в консоль, який tool викликається, з якими аргументами, та який результат
-6. **Обробка помилок** — tool errors не повинні крашити агента; ліміт ітерацій, щоб агент не зациклився
-7. **Покращений System Prompt** — перепишіть system prompt з homework-lesson-3, застосувавши практики промпт-інжинірингу з лекції (чітка роль, структуровані інструкції, приклади, обмеження поведінки тощо).
-
----
-
-### Очікуваний результат
-
-1. **Працюючий агент** — запускається через `python main.py`, працює в інтерактивному режимі
-2. **Власний ReAct loop** — без `create_react_agent`, `AgentExecutor`, або інших агентних абстракцій фреймворків
-3. **Tool calling через API** — tools описані як JSON Schema, LLM сам вирішує, коли їх викликати
-4. **Логування** — в консолі видно кожен крок: який tool викликано, з якими параметрами, який результат
-5. **Multi-step reasoning** — агент робить 3-5+ tool calls на один запит
-6. **Памʼять діалогу** — агент памʼятає попередні повідомлення в межах сесії
-7. **Звіт** — агент генерує та зберігає Markdown-звіт через `write_report`
-
-Приклад логу в консолі:
-```
-You: Порівняй naive RAG та sentence-window retrieval
-
-🔧 Tool call: web_search(query="naive RAG approach explained")
-📎 Result: Found 5 results...
-
-🔧 Tool call: web_search(query="sentence window retrieval RAG")
-📎 Result: Found 5 results...
-
-🔧 Tool call: read_url(url="https://example.com/rag-comparison")
-📎 Result: [5000 chars] Article about RAG approaches...
-
-🔧 Tool call: write_report(filename="rag_comparison.md", content="# RAG Comparison...")
-📎 Result: Report saved to output/rag_comparison.md
-
-Agent: Звіт збережено у output/rag_comparison.md. Ось основні відмінності: ...
+```bash
+cd homework-lesson-4
+npm ci
 ```
 
----
+Environment:
+
+```bash
+cp .env.example .env
+```
+
+Required:
+
+- `OPENAI_API_KEY` for LLM calls.
+
+Optional:
+
+- `GITHUB_TOKEN` for higher GitHub API limits (public repository read may work without it, but with stricter rate limits).
+
+## Run
+
+Development CLI:
+
+```bash
+npm run dev
+```
+
+Type check:
+
+```bash
+npm run check
+```
+
+Build + start:
+
+```bash
+npm run build
+npm run start
+```
+
+## Validation and Definition of Done
+
+Architecture contract and acceptance criteria are fixed in:
+
+- `docs/ARCHITECTURE.md`
+- `docs/DELIVERY_CHECKLIST.md`
+
+Validation commands:
+
+```bash
+npm run invariant:check
+npm run block:check -- 0
+npm run block:check -- 1
+npm run block:check:all
+```
+
+Each block is considered complete only after:
+
+- `npm run check`
+- invariants pass
+- block-specific smoke/E2E check pass
+
+## Architecture Change Enforcement
+
+The repository enforces architecture sync when boundaries/contracts change:
+
+- PR template checkbox: update `docs/ARCHITECTURE.md` when needed.
+- Local git hooks (`pre-commit`, `pre-push`) verify sync + invariants.
+
+Install hooks locally:
+
+```bash
+npm run hooks:install
+```
+
+Manual architecture sync checks:
+
+```bash
+npm run arch:check:staged
+npm run arch:check:upstream
+```
+
+## GitHub Actions (CI)
+
+CI validates the same quality gates on `push`/`pull_request` for `homework-lesson-4`:
+
+- dependency install
+- `npm run check`
+- `npm run invariant:check`
+- `npm run block:check:all`
+
+Workflow file:
+
+- `.github/workflows/homework-lesson-4-ci.yml`
+
+## Notes for Code Review Use-Case
+
+To review a public repository subpath (for example `.../tree/main/homework-lesson-4`), the agent should:
+
+1. call `github_list_directory` for the target path;
+2. call `github_get_file_content` for selected files;
+3. produce findings and optionally save a markdown report via `write_report`.

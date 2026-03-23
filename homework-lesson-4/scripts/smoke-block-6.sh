@@ -33,6 +33,18 @@ const weakSearch = await executeToolCall({
 if (typeof weakSearch.ok !== "boolean" || typeof weakSearch.output !== "string") {
   throw new Error("empty/weak search case did not return structured result.");
 }
+
+const githubDir = await executeToolCall({
+  id: "t4",
+  type: "function",
+  function: {
+    name: "github_list_directory",
+    arguments: "{\"owner\":\"Darker-than-Black\",\"repo\":\"MULTI-AGENT-SYSTEMS-HOMEWORKS\",\"path\":\"homework-lesson-4\",\"ref\":\"main\"}",
+  },
+});
+if (!githubDir.ok) {
+  throw new Error(`github_list_directory should succeed for public path: ${githubDir.output}`);
+}
 '
 
 if ! grep -q "APIConnectionTimeoutError" src/agent/llm-client.ts; then

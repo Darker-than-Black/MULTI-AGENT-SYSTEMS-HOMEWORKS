@@ -81,8 +81,56 @@ export const writeReportSchema: ToolSchema = {
   },
 };
 
+export const githubListDirectorySchema: ToolSchema = {
+  type: "function",
+  function: {
+    name: "github_list_directory",
+    description: "List files and directories in a specific GitHub repository path.",
+    parameters: {
+      type: "object",
+      properties: {
+        owner: { type: "string", description: "GitHub owner/org.", minLength: 1 },
+        repo: { type: "string", description: "Repository name.", minLength: 1 },
+        path: { type: "string", description: "Directory path in repository.", minLength: 1 },
+        ref: {
+          type: "string",
+          description: "Git ref (branch/tag/commit SHA). Optional.",
+          minLength: 1,
+        },
+      },
+      required: ["owner", "repo", "path"],
+      additionalProperties: false,
+    },
+  },
+};
+
+export const githubGetFileContentSchema: ToolSchema = {
+  type: "function",
+  function: {
+    name: "github_get_file_content",
+    description: "Read a file content from a GitHub repository.",
+    parameters: {
+      type: "object",
+      properties: {
+        owner: { type: "string", description: "GitHub owner/org.", minLength: 1 },
+        repo: { type: "string", description: "Repository name.", minLength: 1 },
+        path: { type: "string", description: "File path in repository.", minLength: 1 },
+        ref: {
+          type: "string",
+          description: "Git ref (branch/tag/commit SHA). Optional.",
+          minLength: 1,
+        },
+      },
+      required: ["owner", "repo", "path"],
+      additionalProperties: false,
+    },
+  },
+};
+
 export const toolSchemas: ToolSchema[] = [
   webSearchSchema,
   readUrlSchema,
   writeReportSchema,
+  githubListDirectorySchema,
+  githubGetFileContentSchema,
 ];

@@ -1,4 +1,5 @@
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+export const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
 export const MODEL_NAME = process.env.MODEL_NAME || "gpt-4o-mini";
 export const MAX_ITERATIONS = Number(process.env.MAX_ITERATIONS) || 10;
 export const MAX_SEARCH_RESULTS = Number(process.env.MAX_SEARCH_RESULTS) || 5;

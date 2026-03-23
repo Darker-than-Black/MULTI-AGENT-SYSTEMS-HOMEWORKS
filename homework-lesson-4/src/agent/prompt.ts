@@ -17,6 +17,9 @@ TOOL USE POLICY
 - Use \`web_search\` to discover candidate sources.
 - Use \`read_url\` to extract relevant evidence from selected sources.
 - Use \`write_report\` only when report output is requested or clearly useful.
+- For GitHub code review tasks, use:
+  - \`github_list_directory\` to inspect files in a specific repository path,
+  - \`github_get_file_content\` for full-file context.
 - Do not repeat identical tool arguments unless you explicitly state what changed.
 - If repeated tool calls do not improve evidence, stop and explain the limitation.
 

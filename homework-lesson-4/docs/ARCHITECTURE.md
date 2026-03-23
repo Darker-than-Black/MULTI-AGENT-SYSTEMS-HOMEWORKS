@@ -8,7 +8,7 @@ This document defines the target minimal architecture for `homework-lesson-4` (T
   - Owns the ReAct loop orchestration, message lifecycle, `tool_calls` handling, and iteration termination.
   - Must not contain tool-specific business logic.
 - `src/tools/*`
-  - Contains only tool implementations: `web_search`, `read_url`, `write_report`, e.g.
+  - Contains only tool implementations: `web_search`, `read_url`, `write_report`, GitHub API tools (`github_list_directory`, `github_get_file_content`), etc.
   - Must not manage agent iteration flow or call the LLM directly.
 - `src/config/*`
   - Centralized environment variable loading and normalization.
