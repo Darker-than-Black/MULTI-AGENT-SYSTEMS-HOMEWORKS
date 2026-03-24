@@ -4,3 +4,6 @@ set -euo pipefail
 
 bash homework-lesson-4/scripts/check-architecture-sync.sh --upstream
 bash homework-lesson-4/scripts/check-architecture-invariants.sh
+
+bash homework-lesson-5/scripts/check-architecture-sync.sh --upstream
+bash homework-lesson-5/scripts/check-architecture-invariants.sh
