@@ -1,11 +1,10 @@
-# Homework Lesson 4 (TypeScript): Multi-Agent ReAct System
+# Homework Lesson 5 (TypeScript): LangChain Research Agent
 
-This project was implemented **from scratch in TypeScript** as an alternative to the Python version from previous homework.  
-The core is a custom ReAct loop (`LLM -> tool calls -> tool results -> LLM`) with structured messages, JSON Schema-based tools, and interactive CLI execution.
+TypeScript CLI research agent built on LangChain `createAgent` with a compact architecture and real tools.
 
 ## Implemented Scope
 
-- ReAct loop engine with stop conditions and iteration limits.
+- LangChain agent orchestration (`createAgent`) with recursion guard.
 - Multi-turn CLI with in-memory session context.
 - Real tools:
   - `web_search`
@@ -13,7 +12,7 @@ The core is a custom ReAct loop (`LLM -> tool calls -> tool results -> LLM`) wit
   - `write_report`
   - `github_list_directory` (code review helper for a target repository path)
   - `github_get_file_content` (read file content from a target repository path)
-- Unified tool schema contracts and tool-level argument validation.
+- Tool contracts via LangChain tools + Zod schemas.
 - Report generation to `output/` with date-based file names.
 
 ## Project Setup
@@ -26,7 +25,7 @@ Requirements:
 Install:
 
 ```bash
-cd homework-lesson-4
+cd homework-lesson-5
 npm ci
 ```
 
@@ -109,7 +108,7 @@ npm run arch:check:upstream
 
 ## GitHub Actions (CI)
 
-CI validates the same quality gates on `push`/`pull_request` for `homework-lesson-4`:
+CI validates the same quality gates on `push`/`pull_request` for `homework-lesson-5`:
 
 - dependency install
 - `npm run check`
@@ -122,7 +121,7 @@ Workflow file:
 
 ## Notes for Code Review Use-Case
 
-To review a public repository subpath (for example `.../tree/main/homework-lesson-4`), the agent should:
+To review a public repository subpath (for example `.../tree/main/homework-lesson-5`), the agent should:
 
 1. call `github_list_directory` for the target path;
 2. call `github_get_file_content` for selected files;

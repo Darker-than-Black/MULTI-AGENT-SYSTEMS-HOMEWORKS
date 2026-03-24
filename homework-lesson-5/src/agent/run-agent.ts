@@ -1,84 +1,221 @@
-import { appendAssistantMessage, appendToolMessage, appendUserMessage } from "./memory.js";
-import { requestLlmTurn } from "./llm-client.js";
-import { executeToolCall } from "./tool-dispatcher.js";
-import type { RunAgentTurnInput, RunAgentTurnOutput } from "./types.js";
-import { logIteration, logToolCall, logToolResult } from "../utils/logger.js";
+import { createAgent } from "langchain";
+import { appendAssistantMessage, appendUserMessage } from "./memory.js";
+import { SYSTEM_PROMPT } from "./prompt.js";
+import { langchainTools } from "../tools/langchain-tools.js";
+import type {
+  RunAgentTurnInput,
+  RunAgentTurnOutput,
+  ToolExecutionTrace,
+} from "./types.js";
+import { MODEL_NAME, TEMPERATURE } from "../config/env.js";
+
+const agent = createAgent({
+  model: `openai:${MODEL_NAME}`,
+  systemPrompt: SYSTEM_PROMPT.trim(),
+  tools: langchainTools,
+});
 
 export async function runAgentTurn(
   { maxIterations, memory, userInput }: RunAgentTurnInput,
 ): Promise<RunAgentTurnOutput> {
-  appendUserMessage(memory, userInput);
+  await appendUserMessage(memory, userInput);
 
-  let finalAnswer = "";
-  let lastNonEmptyAssistantText = "";
-  let iterations = 0;
-  let noProgressStreak = 0;
-  let previousToolPlanFingerprint = "";
+  const startIndex = memory.length;
+  const recursionLimit = Math.max(4, maxIterations * 2);
+  const result = await agent.invoke(
+    { messages: memory },
+    { recursionLimit, configurable: { temperature: TEMPERATURE } },
+  );
 
-  while (iterations < maxIterations) {
-    iterations += 1;
-    logIteration(iterations, maxIterations);
+  const generatedMessages = result.messages.slice(startIndex);
+  const assistantMessages = generatedMessages.filter((message) => message.getType() === "ai");
+  const toolMessages = generatedMessages.filter((message) => message.getType() === "tool");
 
-    const llmResult = await requestLlmTurn({ messages: memory });
-    const assistantText = llmResult.assistantMessage.content.trim();
-    const toolCalls = llmResult.assistantMessage.toolCalls ?? [];
+  const lastAssistant = assistantMessages.at(-1);
+  const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
+  const normalizedFinal = finalAnswer || "Agent returned an empty response.";
 
-    if (assistantText) {
-      lastNonEmptyAssistantText = assistantText;
+  await appendAssistantMessage(memory, normalizedFinal);
+
+  return {
+    finalAnswer: normalizedFinal,
+    messages: memory,
+    iterations: assistantMessages.length || 1,
+    wroteReport: didWriteReport(toolMessages),
+    toolExecutions: buildToolExecutionTrace(generatedMessages),
+  };
+}
+
+function stringifyMessageContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") {
+          return part;
+        }
+        if (typeof part === "object" && part !== null && "text" in part) {
+          return String((part as { text?: unknown }).text ?? "");
+        }
+        return "";
+      })
+      .join("");
+  }
+
+  return "";
+}
+
+function didWriteReport(toolMessages: Array<{ name?: string; content: unknown }>): boolean {
+  for (const toolMessage of toolMessages) {
+    if (toolMessage.name !== "write_report") {
+      continue;
     }
 
-    appendAssistantMessage(memory, assistantText, toolCalls);
+    const normalized = stringifyMessageContent(toolMessage.content);
+    if (normalized.includes("Report saved to")) {
+      return true;
+    }
+  }
 
-    if (toolCalls.length === 0) {
-      if (!assistantText && !lastNonEmptyAssistantText) {
-        finalAnswer = "Agent returned an empty response.";
-      } else {
-        finalAnswer = assistantText || lastNonEmptyAssistantText;
+  return false;
+}
+
+function buildToolExecutionTrace(
+  messages: Array<{ getType: () => string; tool_calls?: unknown; tool_call_id?: unknown; content?: unknown }>,
+): ToolExecutionTrace[] {
+  const callsById = new Map<string, { name: string; argsInline: string }>();
+  const traces: ToolExecutionTrace[] = [];
+
+  for (const message of messages) {
+    if (message.getType() === "ai") {
+      const rawCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+      for (const rawCall of rawCalls) {
+        if (typeof rawCall !== "object" || rawCall === null) {
+          continue;
+        }
+
+        const callId = toNonEmptyString((rawCall as { id?: unknown }).id);
+        const name = toNonEmptyString((rawCall as { name?: unknown }).name);
+        const argsInline = formatArgsInline((rawCall as { args?: unknown }).args);
+        if (!callId || !name) {
+          continue;
+        }
+
+        callsById.set(callId, { name, argsInline });
       }
-      break;
     }
 
-    const toolPlanFingerprint = toolCalls
-      .map((toolCall) => `${toolCall.function.name}:${toolCall.function.arguments}`)
-      .join("|");
+    if (message.getType() === "tool") {
+      const callId = toNonEmptyString(message.tool_call_id);
+      const call = callId ? callsById.get(callId) : undefined;
+      const toolName = call?.name || "unknown_tool";
+      const toolArgs = call?.argsInline || "";
+      const content = stringifyMessageContent(message.content);
+      const rendered = renderToolResult(content);
 
-    if (toolPlanFingerprint && toolPlanFingerprint === previousToolPlanFingerprint) {
-      noProgressStreak += 1;
-    } else {
-      noProgressStreak = 0;
-    }
-
-    previousToolPlanFingerprint = toolPlanFingerprint;
-
-    if (noProgressStreak >= 2) {
-      finalAnswer = lastNonEmptyAssistantText || "Stopped early: repeated tool-call plan without progress.";
-      break;
-    }
-
-    let executedAnyTool = false;
-    for (const toolCall of toolCalls) {
-      logToolCall(toolCall.function.name, toolCall.function.arguments, iterations);
-      const result = await executeToolCall(toolCall);
-      logToolResult(result.toolName, result.ok, result.output, iterations);
-      appendToolMessage(memory, result.toolMessage);
-      executedAnyTool = true;
-    }
-
-    if (!executedAnyTool) {
-      finalAnswer = lastNonEmptyAssistantText || "Stopped early: no tool calls were executed.";
-      break;
+      traces.push({
+        call: `${toolName}(${toolArgs})`,
+        resultSummary: rendered.summary,
+        details: rendered.details,
+      });
     }
   }
 
-  if (!finalAnswer) {
-    if (iterations >= maxIterations) {
-      finalAnswer = lastNonEmptyAssistantText
-        ? `${lastNonEmptyAssistantText}\n\n[Stopped: iteration limit reached.]`
-        : "Iteration limit reached before producing a final answer.";
-    } else {
-      finalAnswer = "No final answer was produced.";
+  return traces;
+}
+
+function toNonEmptyString(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const normalized = value.trim();
+  return normalized || "";
+}
+
+function formatArgsInline(args: unknown): string {
+  if (args === undefined || args === null) {
+    return "";
+  }
+
+  if (typeof args === "string") {
+    const trimmed = args.trim();
+    if (!trimmed) {
+      return "";
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return objectToInlineArgs(parsed);
+    } catch {
+      return `payload=${JSON.stringify(trimmed)}`;
     }
   }
 
-  return { finalAnswer, messages: memory, iterations };
+  return objectToInlineArgs(args);
+}
+
+function objectToInlineArgs(value: unknown): string {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return `payload=${JSON.stringify(value)}`;
+  }
+
+  return Object.entries(value as Record<string, unknown>)
+    .map(([key, raw]) => `${key}=${JSON.stringify(raw)}`)
+    .join(", ");
+}
+
+function renderToolResult(content: string): { summary: string; details: string[] } {
+  const normalized = content.trim();
+  if (!normalized) {
+    return { summary: "[empty result]", details: [] };
+  }
+
+  try {
+    const parsed = JSON.parse(normalized) as unknown;
+    if (Array.isArray(parsed)) {
+      return {
+        summary: `[${parsed.length} documents found]`,
+        details: parsed.slice(0, 3).map((item) => summarizeJsonItem(item)),
+      };
+    }
+    if (typeof parsed === "object" && parsed !== null) {
+      return { summary: summarizeJsonItem(parsed), details: [] };
+    }
+  } catch {
+    // plain text output
+  }
+
+  if (normalized.length > 140) {
+    return { summary: `[${normalized.length} chars] ${normalized.slice(0, 120)}...`, details: [] };
+  }
+
+  return { summary: normalized, details: [] };
+}
+
+function summarizeJsonItem(item: unknown): string {
+  if (typeof item === "object" && item !== null) {
+    const record = item as Record<string, unknown>;
+    const title = toNonEmptyString(record.title);
+    const snippet = toNonEmptyString(record.snippet);
+    const path = toNonEmptyString(record.path);
+
+    if (title && snippet) {
+      return `${title} ${snippet.slice(0, 100)}${snippet.length > 100 ? "..." : ""}`;
+    }
+    if (path) {
+      return path;
+    }
+    if (typeof record.content === "string") {
+      const text = record.content.trim();
+      return `[${text.length} chars] ${text.slice(0, 100)}${text.length > 100 ? "..." : ""}`;
+    }
+    return JSON.stringify(record);
+  }
+
+  if (typeof item === "string") {
+    return item;
+  }
+  return String(item);
 }

@@ -1,127 +1,43 @@
-# Architecture Contract (MVP)
+# Architecture Contract (LangChain)
 
-This document defines the target minimal architecture for `homework-lesson-4` (TypeScript) and serves as a technical implementation contract.
+This document defines the minimal architecture for `homework-lesson-5`.
 
 ## 1) Module Boundaries
 
 - `src/agent/*`
-  - Owns the ReAct loop orchestration, message lifecycle, `tool_calls` handling, and iteration termination.
-  - Must not contain tool-specific business logic.
+  - Owns agent setup via LangChain `createAgent`, prompt wiring, and session message conversion.
+  - Must not contain tool business logic.
 - `src/tools/*`
-  - Contains only tool implementations: `web_search`, `read_url`, `write_report`, GitHub API tools (`github_list_directory`, `github_get_file_content`), etc.
-  - Must not manage agent iteration flow or call the LLM directly.
-- `src/config/*`
-  - Centralized environment variable loading and normalization.
-- `src/utils/*`
-  - Cross-cutting utilities (logging, truncation, filename sanitization).
+  - Contains standalone tool implementations only: `web_search`, `read_url`, `write_report`, `github_list_directory`, `github_get_file_content`.
+  - Must not import `openai` or `src/agent/*`.
+  - `src/tools/langchain-tools.ts` is the only allowed place to import `langchain` for tool registration.
 - `src/main.ts`
-  - CLI entry point: captures user input, invokes the agent, prints results.
+  - CLI loop only: read input, call `runAgentTurn`, print answer, optional manual report save.
+- `src/config/*`, `src/utils/*`
+  - Env config and shared utility helpers.
 
-## 2) Core Interfaces (Source of Truth)
+## 2) Core Flow
 
-The following types define the canonical system contract:
+1. `main.ts` collects user text.
+2. `runAgentTurn(...)` appends user message to in-memory session.
+3. LangChain agent (`createAgent`) runs model + tools with recursion limit.
+4. Final AI message is returned to CLI.
+5. CLI optionally saves markdown report if it was not saved by tool call.
 
-- `AgentMessage` (discriminated union):
-  - `system`: `{ role: "system", content }`
-  - `user`: `{ role: "user", content }`
-  - `assistant`: `{ role: "assistant", content, toolCalls? }`
-  - `tool`: `{ role: "tool", name, toolCallId, content, isError? }`
-- `ToolCall` (function tool call payload):
-  - `{ id, type: "function", function: { name, arguments } }`
-- `ToolExecutionResult`:
-  - `{ toolCallId, toolName, ok, output, toolMessage }`
-- `LlmTurnResult`
-- `RunAgentTurnInput`
-- `RunAgentTurnOutput`
+## 3) Invariants
 
-Source file: `src/agent/types.ts`.
+- `run-agent.ts` must initialize a LangChain agent with `createAgent`.
+- Legacy manual-loop files must not exist:
+  - `src/agent/llm-client.ts`
+  - `src/agent/llm-adapter.ts`
+  - `src/agent/tool-dispatcher.ts`
+  - `src/tools/index.ts`
+  - `src/tools/schemas.ts`
+  - `src/tools/validation.ts`
+- `src/tools/*` remains decoupled from agent/OpenAI dependencies.
+- Only `src/tools/langchain-tools.ts` may import `langchain`.
+- Session memory keeps bounded history (`MAX_SESSION_MESSAGES`) and truncates long message content.
 
-## 3) Data Flow (Baseline Scenario)
+## 4) Maintenance Rule
 
-1. `main.ts` receives user input.
-2. `runAgentTurn(...)` appends a user message to session memory.
-3. `llm-client` sends `messages` + JSON Schema tools to the provider API (`tool_choice: "auto"`) and returns an `assistantMessage` (optionally with `assistantMessage.toolCalls`).
-4. `tool-dispatcher` resolves and executes tools via `tools/index.ts`.
-5. Tool execution results are normalized and appended to `messages` as canonical role `tool` messages.
-6. The loop continues until final answer or `MAX_ITERATIONS`.
-7. `main.ts` outputs the final assistant response.
-
-## 4) Architectural Invariants (Non-Negotiable)
-
-- Only `run-agent.ts` controls ReAct loop iterations.
-- `tools/*` are decoupled from LLM API concerns and conversation memory.
-- `llm-client.ts` must never execute tools; it only adapts provider responses to `LlmTurnResult`.
-- All tool arguments must be routed through `tool-dispatcher.ts`.
-- Every tool call must be logged: tool name, arguments, result/error.
-- Tool/API failures must not crash the process; termination must remain controlled.
-
-## 5) Definition of Done by Delivery Block
-
-### Block 0: Base Contract
-- File/module structure is aligned with this document.
-- `npm run check` passes.
-
-### Block 1: Tools + JSON Schema
-- All three tools are implemented.
-- JSON Schemas are synchronized with runtime argument contracts.
-- `write_report` persists files to `output/`.
-
-### Block 2: LLM Client Integration
-- A real provider API call path is operational (`src/agent/llm-client.ts`).
-- `messages` and `tools` are sent in a single API request.
-- Provider responses are normalized to internal `LlmTurnResult` (`assistant text` + validated `tool_calls`).
-- An adapter layer (`src/agent/llm-adapter.ts`) isolates raw provider payload parsing from client transport logic.
-- API error handling covers rate limits, connection failures/timeouts, and invalid response shape.
-
-### Block 3: ReAct Loop Core
-- End-to-end loop `LLM -> tools -> LLM` is functional.
-- `MAX_ITERATIONS` guardrail is enforced.
-- Explicit stop conditions prevent infinite loops (e.g., repeated identical tool-call plans).
-- At least one scenario demonstrates 3-5+ tool calls in a single request.
-- Loop termination is deterministic: final answer fallback is provided even when assistant text is empty.
-- Block validation includes:
-  - static guardrail checks for loop limit and anti-loop stop conditions,
-  - an optional live multi-step scenario when API credentials are available.
-
-### Block 4: Memory + Interactive CLI
-- Interactive multi-turn CLI is functional.
-- In-session conversational memory is preserved across turns.
-- Session memory is managed explicitly via `src/agent/memory.ts` (`createSessionMemory` + append helpers).
-- Memory budget guardrails are enforced (message count + per-message content truncation).
-- CLI fallback report naming uses a date-first convention:
-  - default: `YYYY-MM-DD_HH-mm-ss.md`
-  - with user suffix: `YYYY-MM-DD_HH-mm-ss-{USER_FILENAME}.md`
-
-### Block 5: Prompt Engineering
-- System prompt is upgraded with explicit role, structured directives, and behavioral constraints.
-- Tool-usage quality is measurably improved vs. baseline prompt.
-- Prompt includes compact few-shot behavior examples for tool-first execution.
-
-### Block 6: Hardening + E2E Validation
-- Step-level logging is complete and readable.
-- Logs include iteration number, tool name, arguments, and result/error preview.
-- Error handling prevents unhandled crashes.
-- End-to-end scenario completes with report generation in `output/`.
-- Edge cases are handled and validated:
-  - invalid tool arguments,
-  - failed URL reads,
-  - empty/weak search results,
-  - LLM API timeout mapping.
-
-## 6) Document Maintenance Rule
-
-If any of the following change:
-- module boundaries,
-- type contracts,
-- data flow,
-
-then `docs/ARCHITECTURE.md` must be updated in the same commit.
-
-## 7) Operational Enforcement
-
-- Block closure must follow `docs/DELIVERY_CHECKLIST.md`.
-- Use `npm run block:check -- <block-id>` to enforce:
-  - `npm run check`
-  - `npm run invariant:check`
-  - block-specific smoke/E2E
-- Local git hooks (`pre-commit`, `pre-push`) enforce architecture sync and invariant checks.
+If boundaries, data flow, or agent contract change, update this document in the same commit.

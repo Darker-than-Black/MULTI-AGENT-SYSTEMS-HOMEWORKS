@@ -7,9 +7,9 @@ MODE="${1:-}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-ARCH_FILE="homework-lesson-4/docs/ARCHITECTURE.md"
-TYPE_CONTRACT_FILE="homework-lesson-4/src/agent/types.ts"
-MODULE_BOUNDARY_PATTERN='^homework-lesson-4/src/(agent|tools|config|utils)/'
+ARCH_FILE="homework-lesson-5/docs/ARCHITECTURE.md"
+TYPE_CONTRACT_FILE="homework-lesson-5/src/agent/types.ts"
+MODULE_BOUNDARY_PATTERN='^homework-lesson-5/src/(agent|tools|config|utils)/'
 
 if [[ ! -f "$ARCH_FILE" ]]; then
   echo "Architecture check failed: missing $ARCH_FILE"

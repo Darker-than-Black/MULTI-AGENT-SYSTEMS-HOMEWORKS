@@ -1,61 +1,6 @@
-export type AgentRole = "system" | "user" | "assistant" | "tool";
+import type { AIMessage, HumanMessage, SystemMessage } from "langchain";
 
-export interface ToolCall {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-}
-
-export interface SystemMessage {
-  role: "system";
-  content: string;
-}
-
-export interface UserMessage {
-  role: "user";
-  content: string;
-}
-
-export interface AssistantMessage {
-  role: "assistant";
-  content: string;
-  toolCalls?: ToolCall[];
-}
-
-export interface ToolMessage {
-  role: "tool";
-  name: string;
-  toolCallId: string;
-  content: string;
-  isError?: boolean;
-}
-
-export type AgentMessage =
-  | SystemMessage
-  | UserMessage
-  | AssistantMessage
-  | ToolMessage;
-
-export interface ToolResultPayload {
-  ok: boolean;
-  toolName: string;
-  output: string;
-}
-
-export interface ToolExecutionResult {
-  toolCallId: string;
-  toolName: string;
-  ok: boolean;
-  output: string;
-  toolMessage: ToolMessage;
-}
-
-export interface LlmTurnResult {
-  assistantMessage: AssistantMessage;
-}
+export type AgentMessage = SystemMessage | HumanMessage | AIMessage;
 
 export interface RunAgentTurnInput {
   userInput: string;
@@ -67,4 +12,12 @@ export interface RunAgentTurnOutput {
   finalAnswer: string;
   messages: AgentMessage[];
   iterations: number;
+  wroteReport: boolean;
+  toolExecutions: ToolExecutionTrace[];
+}
+
+export interface ToolExecutionTrace {
+  call: string;
+  resultSummary: string;
+  details: string[];
 }

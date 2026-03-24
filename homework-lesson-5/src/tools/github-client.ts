@@ -2,7 +2,7 @@ import { GITHUB_TOKEN } from "../config/env.js";
 import { ToolExecutionError } from "./errors.js";
 
 const GITHUB_API_BASE = "https://api.github.com";
-const USER_AGENT = "homework-lesson-4-research-agent";
+const USER_AGENT = "homework-lesson-5-research-agent";
 const GITHUB_REQUEST_TIMEOUT_MS = 20000;
 
 export async function githubJsonRequest<T>(path: string): Promise<T> {

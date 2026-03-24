@@ -5,55 +5,59 @@ set -euo pipefail
 echo "[smoke:block:6] Running edge-case validation..."
 
 node --import tsx -e '
-import { executeToolCall } from "./src/agent/tool-dispatcher.ts";
+import { langchainTools } from "./src/tools/langchain-tools.ts";
+import { readUrl } from "./src/tools/read-url.ts";
+import { webSearch } from "./src/tools/web-search.ts";
+import { githubListDirectory } from "./src/tools/github-list-directory.ts";
 
-const invalidArgs = await executeToolCall({
-  id: "t1",
-  type: "function",
-  function: { name: "web_search", arguments: "{\"query\":" },
-});
-if (invalidArgs.ok) {
-  throw new Error("invalid tool args case should fail.");
+const webSearchTool = langchainTools.find((tool) => tool.name === "web_search");
+if (!webSearchTool) {
+  throw new Error("web_search tool is missing.");
 }
 
-const failedRead = await executeToolCall({
-  id: "t2",
-  type: "function",
-  function: { name: "read_url", arguments: "{\"url\":\"https://httpstat.us/404\"}" },
-});
-if (failedRead.ok) {
+let invalidArgsFailed = false;
+try {
+  await webSearchTool.invoke({ query: "" });
+} catch {
+  invalidArgsFailed = true;
+}
+if (!invalidArgsFailed) {
+  throw new Error("invalid LangChain tool args case should fail.");
+}
+
+let readFailed = false;
+try {
+  await readUrl({ url: "https://httpstat.us/404" });
+} catch {
+  readFailed = true;
+}
+if (!readFailed) {
   throw new Error("failed URL read case should fail.");
 }
 
-const weakSearch = await executeToolCall({
-  id: "t3",
-  type: "function",
-  function: { name: "web_search", arguments: "{\"query\":\"zzzzxxyyqqvv__edge_case_20260323\"}" },
-});
-if (typeof weakSearch.ok !== "boolean" || typeof weakSearch.output !== "string") {
-  throw new Error("empty/weak search case did not return structured result.");
+const weakSearch = await webSearch({ query: "zzzzxxyyqqvv__edge_case_20260323" });
+if (typeof weakSearch !== "string" || weakSearch.length === 0) {
+  throw new Error("weak search case did not return text output.");
 }
 
-const githubDir = await executeToolCall({
-  id: "t4",
-  type: "function",
-  function: {
-    name: "github_list_directory",
-    arguments: "{\"owner\":\"Darker-than-Black\",\"repo\":\"MULTI-AGENT-SYSTEMS-HOMEWORKS\",\"path\":\"homework-lesson-4\",\"ref\":\"main\"}",
-  },
+const githubDir = await githubListDirectory({
+  owner: "Darker-than-Black",
+  repo: "MULTI-AGENT-SYSTEMS-HOMEWORKS",
+  path: "homework-lesson-5",
+  ref: "main",
 });
-if (!githubDir.ok) {
-  throw new Error(`github_list_directory should succeed for public path: ${githubDir.output}`);
+if (!githubDir.includes("\"entries\"")) {
+  throw new Error("github_list_directory should return entries payload.");
 }
 '
 
-if ! grep -q "APIConnectionTimeoutError" src/agent/llm-client.ts; then
-  echo "LLM timeout handling missing in llm-client.ts"
+if [[ -e "src/agent/llm-client.ts" ]]; then
+  echo "Legacy llm-client.ts should be removed."
   exit 1
 fi
 
-if ! grep -q "request timed out" src/agent/llm-client.ts; then
-  echo "LLM timeout user-facing message missing in llm-client.ts"
+if [[ -e "src/agent/tool-dispatcher.ts" ]]; then
+  echo "Legacy tool-dispatcher.ts should be removed."
   exit 1
 fi
 

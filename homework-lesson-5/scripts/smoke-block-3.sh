@@ -2,23 +2,23 @@
 
 set -euo pipefail
 
-echo "[smoke:block:3] Running ReAct loop guardrail validation..."
+echo "[smoke:block:3] Running LangChain agent guardrail validation..."
 
 RUN_AGENT_FILE="src/agent/run-agent.ts"
 PROMPT_FILE="src/agent/prompt.ts"
 
-if ! grep -q "while (iterations < maxIterations)" "$RUN_AGENT_FILE"; then
-  echo "Missing MAX_ITERATIONS guard in run-agent.ts"
+if ! grep -q "createAgent({" "$RUN_AGENT_FILE"; then
+  echo "Missing LangChain createAgent setup in run-agent.ts"
   exit 1
 fi
 
-if ! grep -q "noProgressStreak" "$RUN_AGENT_FILE"; then
-  echo "Missing anti-loop noProgressStreak guard in run-agent.ts"
+if ! grep -q "systemPrompt: SYSTEM_PROMPT.trim()" "$RUN_AGENT_FILE"; then
+  echo "Missing system prompt wiring in run-agent.ts"
   exit 1
 fi
 
-if ! grep -q "Stopped early: repeated tool-call plan without progress." "$RUN_AGENT_FILE"; then
-  echo "Missing repeated-plan stop condition message in run-agent.ts"
+if ! grep -q "recursionLimit" "$RUN_AGENT_FILE"; then
+  echo "Missing recursion limit guard in run-agent.ts"
   exit 1
 fi
 
@@ -32,8 +32,8 @@ echo "[smoke:block:3] Static guardrail checks passed."
 echo "[smoke:block:3] Running optional live multi-step scenario..."
 if [[ -n "${OPENAI_API_KEY:-}" ]]; then
   OUTPUT="$(printf 'Порівняй naive RAG та sentence-window retrieval і збережи звіт у файл\nquit\n' | npm run dev 2>&1)"
-  if ! echo "$OUTPUT" | grep -q "🔧 Tool call:"; then
-    echo "Live scenario failed: expected at least one tool call log."
+  if ! echo "$OUTPUT" | grep -q "Agent:"; then
+    echo "Live scenario failed: expected agent response output."
     echo "$OUTPUT"
     exit 1
   fi

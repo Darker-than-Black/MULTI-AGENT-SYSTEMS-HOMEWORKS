@@ -61,6 +61,6 @@ npm run block:check -- 0
 ## Explicit Code Review Invariant Checks
 
 During code review, verify and annotate these items explicitly:
-- [ ] ReAct loop control remains only in `src/agent/run-agent.ts` (REPL loop in `src/main.ts` is expected).
+- [ ] `src/agent/run-agent.ts` uses LangChain `createAgent` (no custom manual ReAct loop).
 - [ ] `src/tools/*` remains decoupled from direct LLM execution concerns.
-- [ ] `src/agent/tool-dispatcher.ts` remains the single tool execution entrypoint.
+- [ ] Legacy manual-loop files (`llm-client`, `llm-adapter`, `tool-dispatcher`, `tools/index`, `tools/schemas`, `tools/validation`) are absent.

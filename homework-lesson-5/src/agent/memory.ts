@@ -1,14 +1,18 @@
+import { AIMessage, HumanMessage, SystemMessage, trimMessages } from "langchain";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { truncateText } from "../utils/truncate.js";
-import type { AgentMessage, ToolCall, ToolMessage } from "./types.js";
-import { MAX_MESSAGE_CONTENT_CHARS, MAX_SESSION_MESSAGES } from "../config/env.js";
+import type { AgentMessage } from "./types.js";
+import {
+  MAX_MESSAGE_CONTENT_CHARS,
+  MAX_SESSION_MESSAGES,
+} from "../config/env.js";
 
 export interface SessionMemory {
   messages: AgentMessage[];
 }
 
 export function createInitialMemory(): AgentMessage[] {
-  return [{ role: "system", content: SYSTEM_PROMPT.trim() }];
+  return [new SystemMessage(SYSTEM_PROMPT.trim())];
 }
 
 export function createSessionMemory(): SessionMemory {
@@ -17,45 +21,36 @@ export function createSessionMemory(): SessionMemory {
   };
 }
 
-export function appendUserMessage(messages: AgentMessage[], content: string): AgentMessage[] {
-  messages.push({ role: "user", content });
-  enforceMemoryBudget(messages);
+export async function appendUserMessage(
+  messages: AgentMessage[],
+  content: string,
+): Promise<AgentMessage[]> {
+  messages.push(new HumanMessage(truncateText(content, MAX_MESSAGE_CONTENT_CHARS)));
+  await enforceMemoryBudget(messages);
   return messages;
 }
 
-export function appendAssistantMessage(messages: AgentMessage[], content: string, toolCalls?: ToolCall[]): AgentMessage[] {
-  const message = { role: "assistant" as const, content, toolCalls: toolCalls?.length ? toolCalls : [] };
-  messages.push(message);
-  enforceMemoryBudget(messages);
+export async function appendAssistantMessage(
+  messages: AgentMessage[],
+  content: string,
+): Promise<AgentMessage[]> {
+  messages.push(new AIMessage(truncateText(content, MAX_MESSAGE_CONTENT_CHARS)));
+  await enforceMemoryBudget(messages);
   return messages;
 }
 
-export function appendToolMessage(messages: AgentMessage[], message: ToolMessage): AgentMessage[] {
-  messages.push(message);
-  enforceMemoryBudget(messages);
-  return messages;
-}
+async function enforceMemoryBudget(messages: AgentMessage[]): Promise<void> {
+  const trimmed = await trimMessages(messages, {
+    maxTokens: Math.max(MAX_SESSION_MESSAGES, 1),
+    tokenCounter: (current) => current.length,
+    strategy: "last",
+    includeSystem: true,
+    startOn: "human",
+  });
 
-function enforceMemoryBudget(messages: AgentMessage[]): void {
-  const systemMessage = messages.find((message) => message.role === "system") || {
-    role: "system" as const,
-    content: SYSTEM_PROMPT.trim(),
-  };
-
-  const nonSystem = messages.filter((message) => message.role !== "system");
-  const allowedNonSystem = Math.max(MAX_SESSION_MESSAGES - 1, 1);
-  const sliced = nonSystem.slice(-allowedNonSystem).map(truncateMessageContent);
-
-  messages.splice(0, messages.length, systemMessage, ...sliced);
-}
-
-function truncateMessageContent(message: AgentMessage): AgentMessage {
-  if (["tool", "assistant", "user"].includes(message.role)) {
-    return {
-      ...message,
-      content: truncateText(message.content, MAX_MESSAGE_CONTENT_CHARS),
-    };
+  if (trimmed.length === 0 || trimmed[0].getType() !== "system") {
+    trimmed.unshift(new SystemMessage(SYSTEM_PROMPT.trim()));
   }
 
-  return message;
+  messages.splice(0, messages.length, ...(trimmed as AgentMessage[]));
 }

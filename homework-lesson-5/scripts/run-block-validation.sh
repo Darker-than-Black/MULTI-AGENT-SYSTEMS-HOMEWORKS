@@ -11,7 +11,7 @@ if [[ -z "$BLOCK" ]]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-PROJECT_DIR="${REPO_ROOT}/homework-lesson-4"
+PROJECT_DIR="${REPO_ROOT}/homework-lesson-5"
 cd "$PROJECT_DIR"
 
 echo "[block:${BLOCK}] Running shared quality gates..."
