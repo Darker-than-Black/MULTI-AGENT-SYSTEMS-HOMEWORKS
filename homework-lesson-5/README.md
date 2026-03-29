@@ -1,128 +1,106 @@
-# Homework Lesson 5 (TypeScript): LangChain Research Agent
+# Завдання: Research Agent з RAG-системою
 
-TypeScript CLI research agent built on LangChain `createAgent` with a compact architecture and real tools.
+Розширте свого Research Agent з `homework-lesson-3` — додайте **RAG-інструмент** з гібридним пошуком та reranking, щоб агент міг шукати не лише в інтернеті, а й у локальній базі знань.
 
-## Implemented Scope
+---
 
-- LangChain agent orchestration (`createAgent`) with recursion guard.
-- Multi-turn CLI with in-memory session context.
-- Real tools:
-  - `web_search`
-  - `read_url`
-  - `write_report`
-  - `github_list_directory` (code review helper for a target repository path)
-  - `github_get_file_content` (read file content from a target repository path)
-- Tool contracts via LangChain tools + Zod schemas.
-- Report generation to `output/` with date-based file names.
+### Що змінюється порівняно з попередніми homework
 
-## Project Setup
+| Було (homework-lesson-3)                        | Стає (homework-lesson-5) |
+|-------------------------------------------------|---|
+| Tools: `web_search`, `read_url`, `write_report` | + новий tool: `knowledge_search` |
+| Агент шукає лише в інтернеті                    | Агент шукає і в інтернеті, і в локальній базі знань |
+|                                                 | Є pipeline для завантаження документів у векторну БД |
+|                                                 | Hybrid search (semantic + BM25) з cross-encoder reranking |
 
-Requirements:
+---
 
-- Node.js `>=20`
-- npm `>=10`
+### Що потрібно реалізувати
 
-Install:
+#### 1. Knowledge Ingestion Pipeline (`ingest.py`)
 
-```bash
-cd homework-lesson-5
-npm ci
+Скрипт, який завантажує документи у векторну базу даних:
+
+- **Завантаження документів** — PDF файли з директорії `./data/`
+- **Chunking** — розбиття на чанки з `RecursiveCharacterTextSplitter` (або semantic chunking — за бажанням)
+- **Embeddings** — використайте `text-embedding-3-small` або `text-embedding-3-large`
+- **Векторна БД** — оберіть одну з: FAISS (для простоти), Qdrant, Chroma, або pgvector
+- **Збереження індексу** — індекс повинен зберігатися на диск і перезавантажуватися без повторного embedding
+
+Скрипт запускається окремо: `python ingest.py` — і створює/оновлює індекс.
+
+#### 2. Hybrid Retrieval з Reranking (`retriever.py`)
+
+Модуль, що реалізує пошук по базі знань:
+
+- **Semantic search** — пошук за cosine similarity у векторній БД
+- **BM25 search** — лексичний пошук за ключовими словами
+- **Ensemble** — об'єднання результатів semantic + BM25 (наприклад, через `EnsembleRetriever` або вручну)
+- **Reranking** — cross-encoder reranker (наприклад, `BAAI/bge-reranker-base`) для фільтрації шуму
+
+#### 3. RAG Tool для агента (`tools.py`)
+
+Новий tool `knowledge_search`, який агент використовує поряд з `web_search`, `read_url`, `write_report`:
+
+```python
+def knowledge_search(query: str) -> str:
+    """Search the local knowledge base. Use for questions about ingested documents."""
+    ...
 ```
 
-Environment:
+Агент сам вирішує, коли шукати в інтернеті (`web_search`), а коли — в локальній базі (`knowledge_search`).
 
-```bash
-cp .env.example .env
+#### 4. Тестові дані (`data/`)
+
+У `./data/` вже є декілька документів для тестування. За бажанням, додайте ще для перевірки роботи системи з різними типами.
+
+---
+
+### Структура проекту
+
+```
+homework-lesson-5/
+├── main.py              # Entry point (з homework-lesson-3/4, адаптований)
+├── agent.py             # Agent setup з новим knowledge_search tool
+├── tools.py             # web_search, read_url, write_report, knowledge_search
+├── retriever.py         # Hybrid retrieval + reranking logic
+├── ingest.py            # Ingestion pipeline: docs → chunks → embeddings → vector DB
+├── config.py            # Settings
+├── requirements.txt     # Залежності
+├── data/                # Документи для ingestion
+│   └── (ваші PDF/TXT файли)
+└── .env                 # API ключі (не комітити!)
 ```
 
-Required:
+---
 
-- `OPENAI_API_KEY` for LLM calls.
+### Очікуваний результат
 
-Optional:
+1. **Ingestion працює** — `python ingest.py` завантажує документи з `./data/` та створює індекс
+2. **Hybrid search** — пошук використовує і semantic, і BM25, результати об'єднуються
+3. **Reranking** — cross-encoder фільтрує нерелевантні результати
+4. **Агент використовує RAG** — агент самостійно вирішує, коли шукати в базі знань, а коли в інтернеті
+5. **Multi-step reasoning** — агент комбінує результати з різних джерел (web + knowledge base)
+6. **Звіт** — агент генерує Markdown-звіт з посиланнями на джерела
 
-- `GITHUB_TOKEN` for higher GitHub API limits (public repository read may work without it, but with stricter rate limits).
-
-## Run
-
-Development CLI:
-
-```bash
-npm run dev
+Приклад логу в консолі:
 ```
+You: Що таке RAG і які є підходи до retrieval?
 
-Type check:
+🔧 Tool call: knowledge_search(query="RAG retrieval approaches")
+📎 Result: [3 documents found]
+   - [Page 2] Retrieval-augmented generation combines...
+   - [Page 5] Hybrid search approaches include...
+   - [Page 3] Dense retrieval using bi-encoders...
 
-```bash
-npm run check
+🔧 Tool call: web_search(query="RAG retrieval techniques 2026")
+📎 Result: Found 5 results...
+
+🔧 Tool call: read_url(url="https://example.com/advanced-rag")
+📎 Result: [5000 chars] Latest RAG techniques...
+
+🔧 Tool call: write_report(filename="rag_approaches.md", content="# RAG Approaches...")
+📎 Result: Report saved to output/rag_approaches.md
+
+Agent: RAG — це техніка, де...
 ```
-
-Build + start:
-
-```bash
-npm run build
-npm run start
-```
-
-## Validation and Definition of Done
-
-Architecture contract and acceptance criteria are fixed in:
-
-- `docs/ARCHITECTURE.md`
-- `docs/DELIVERY_CHECKLIST.md`
-
-Validation commands:
-
-```bash
-npm run invariant:check
-npm run block:check -- 0
-npm run block:check -- 1
-npm run block:check:all
-```
-
-Each block is considered complete only after:
-
-- `npm run check`
-- invariants pass
-- block-specific smoke/E2E check pass
-
-## Architecture Change Enforcement
-
-The repository enforces architecture sync when boundaries/contracts change:
-
-- PR template checkbox: update `docs/ARCHITECTURE.md` when needed.
-- Local git hooks (`pre-commit`, `pre-push`) verify sync + invariants.
-
-Install hooks locally:
-
-```bash
-npm run hooks:install
-```
-
-Manual architecture sync checks:
-
-```bash
-npm run arch:check:staged
-npm run arch:check:upstream
-```
-
-## GitHub Actions (CI)
-
-CI validates the same quality gates on `push`/`pull_request` for `homework-lesson-5`:
-
-- dependency install
-- `npm run check`
-- `npm run invariant:check`
-- `npm run block:check:all`
-
-Workflow file:
-
-- `.github/workflows/homework-lesson-4-ci.yml`
-
-## Notes for Code Review Use-Case
-
-To review a public repository subpath (for example `.../tree/main/homework-lesson-5`), the agent should:
-
-1. call `github_list_directory` for the target path;
-2. call `github_get_file_content` for selected files;
-3. produce findings and optionally save a markdown report via `write_report`.
