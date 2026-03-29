@@ -1,4 +1,5 @@
 import { createAgent } from "langchain";
+import { ChatOpenAI } from "@langchain/openai";
 import { appendAssistantMessage, appendUserMessage } from "./memory.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { langchainTools } from "../tools/langchain-tools.js";
@@ -7,10 +8,20 @@ import type {
   RunAgentTurnOutput,
   ToolExecutionTrace,
 } from "./types.js";
-import { MODEL_NAME, TEMPERATURE } from "../config/env.js";
+import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env.js";
+
+if (!OPENAI_API_KEY.trim()) {
+  throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-5/.env.");
+}
+
+const model = new ChatOpenAI({
+  model: MODEL_NAME,
+  temperature: TEMPERATURE,
+  apiKey: OPENAI_API_KEY,
+});
 
 const agent = createAgent({
-  model: `openai:${MODEL_NAME}`,
+  model,
   systemPrompt: SYSTEM_PROMPT.trim(),
   tools: langchainTools,
 });
@@ -24,7 +35,7 @@ export async function runAgentTurn(
   const recursionLimit = Math.max(4, maxIterations * 2);
   const result = await agent.invoke(
     { messages: memory },
-    { recursionLimit, configurable: { temperature: TEMPERATURE } },
+    { recursionLimit },
   );
 
   const generatedMessages = result.messages.slice(startIndex);
