@@ -5,6 +5,7 @@ import { webSearch } from "./web-search.js";
 import { writeReport } from "./write-report.js";
 import { githubListDirectory } from "./github-list-directory.js";
 import { githubGetFileContent } from "./github-get-file-content.js";
+import { knowledgeSearch } from "./knowledge-search.js";
 
 export const langchainTools = [
   tool(
@@ -88,6 +89,19 @@ export const langchainTools = [
         repo: z.string().trim().min(1).describe("Repository name."),
         path: z.string().trim().min(1).describe("File path in repository."),
         ref: z.string().trim().min(1).optional().describe("Git ref (branch/tag/commit SHA)."),
+      }),
+    },
+  ),
+  tool(
+    async ({ query }) =>
+      knowledgeSearch({
+        query,
+      }),
+    {
+      name: "knowledge_search",
+      description: "Search the local ingested knowledge base with hybrid retrieval and reranking.",
+      schema: z.object({
+        query: z.string().trim().min(1).max(500).describe("Question or search query for the local knowledge base."),
       }),
     },
   ),
