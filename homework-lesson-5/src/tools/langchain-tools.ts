@@ -15,7 +15,7 @@ export const langchainTools = [
       }),
     {
       name: "web_search",
-      description: "Search web results by query.",
+      description: "Search the web for external or recent sources. Use when the user asks for current information, web comparison, or web references.",
       schema: z.object({
         query: z.string().trim().min(1).max(500).describe("Search query."),
       }),
@@ -28,7 +28,7 @@ export const langchainTools = [
       }),
     {
       name: "read_url",
-      description: "Read and extract text from a URL.",
+      description: "Read and extract text from a selected web page. Use after web_search when the user asks to inspect or compare source content.",
       schema: z.object({
         url: z
           .string()
@@ -47,7 +47,7 @@ export const langchainTools = [
       }),
     {
       name: "write_report",
-      description: "Save markdown report to output directory.",
+      description: "Save a markdown report to the output directory. Use when the user asks to save or export the result.",
       schema: z.object({
         filename: z.string().trim().min(1).max(255).describe("Report file name (markdown)."),
         content: z.string().trim().min(1).describe("Markdown report content."),

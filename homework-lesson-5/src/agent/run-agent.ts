@@ -32,7 +32,8 @@ export async function runAgentTurn(
   await appendUserMessage(memory, userInput);
 
   const startIndex = memory.length;
-  const recursionLimit = Math.max(4, maxIterations * 2);
+  // Multi-tool runs can require several AI -> tool -> observation cycles per user request.
+  const recursionLimit = Math.max(12, maxIterations * 4);
   const result = await agent.invoke(
     { messages: memory },
     { recursionLimit },

@@ -32,11 +32,14 @@ This document defines the minimal architecture for `homework-lesson-5`.
 1. `main.ts` collects user text.
 2. `runAgentTurn(...)` appends the user message to in-memory session state.
 3. LangChain agent (`createAgent`) runs an explicitly initialized chat model plus registered tools.
-4. When local knowledge is needed, the agent calls `knowledge_search`.
-5. `knowledge_search` delegates to `src/rag/retriever.ts`.
-6. Retrieval results return to the agent as tool output.
-7. Final AI message is returned to the CLI.
-8. CLI optionally saves a markdown report if it was not saved by tool call.
+4. The system prompt decides whether the run requires local evidence, web evidence, or both.
+5. When local knowledge is needed, the agent calls `knowledge_search`.
+6. When the user explicitly requests web sources or recent external comparison, the agent must use `web_search` and then `read_url` for relevant results before finishing.
+7. When the user explicitly requests a saved report, the agent must call `write_report` before finishing.
+8. `knowledge_search` delegates to `src/rag/retriever.ts`.
+9. Retrieval and web evidence return to the agent as tool output.
+10. Final AI message is returned to the CLI.
+11. CLI optionally saves a markdown report if it was not saved by tool call.
 
 ### Offline Ingestion Flow
 
@@ -63,6 +66,7 @@ The following categories of configuration must be represented in `src/config/env
 
 - `run-agent.ts` must initialize a LangChain agent with `createAgent`.
 - `run-agent.ts` must use an explicit chat model configured from `src/config/env.ts`.
+- `run-agent.ts` must allow enough recursion budget for multi-tool runs that combine local search, web search, page reads, and report writing.
 - `src/tools/*` remains decoupled from agent/OpenAI dependencies.
 - `src/rag/*` remains decoupled from `src/agent/*`.
 - `knowledge_search` must remain a tool-level adapter, not the home of retrieval business logic.
