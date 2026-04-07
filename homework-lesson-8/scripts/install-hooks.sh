@@ -2,23 +2,14 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 chmod +x .githooks/pre-commit
 chmod +x .githooks/pre-push
-chmod +x homework-lesson-5/scripts/check-architecture-sync.sh
-chmod +x homework-lesson-5/scripts/check-architecture-invariants.sh
-chmod +x homework-lesson-5/scripts/run-block-validation.sh
-chmod +x homework-lesson-5/scripts/run-all-block-validations.sh
-chmod +x homework-lesson-5/scripts/smoke-block-0.sh
-chmod +x homework-lesson-5/scripts/smoke-block-1.sh
-chmod +x homework-lesson-5/scripts/smoke-block-2.sh
-chmod +x homework-lesson-5/scripts/smoke-block-3.sh
-chmod +x homework-lesson-5/scripts/smoke-block-4.sh
-chmod +x homework-lesson-5/scripts/smoke-block-5.sh
-chmod +x homework-lesson-5/scripts/smoke-block-6.sh
-chmod +x homework-lesson-5/scripts/smoke-block-placeholder.sh
+find "$PROJECT_DIR/scripts" -maxdepth 1 -type f -name "*.sh" -exec chmod +x {} +
 
 git config core.hooksPath .githooks
 

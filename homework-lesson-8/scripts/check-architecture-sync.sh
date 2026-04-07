@@ -4,12 +4,15 @@ set -euo pipefail
 
 MODE="${1:-}"
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel)"
+PROJECT_REL="${PROJECT_DIR#${REPO_ROOT}/}"
 cd "$REPO_ROOT"
 
-ARCH_FILE="homework-lesson-5/docs/ARCHITECTURE.md"
-TYPE_CONTRACT_FILE="homework-lesson-5/src/agent/types.ts"
-MODULE_BOUNDARY_PATTERN='^homework-lesson-5/src/(agent|tools|config|utils)/'
+ARCH_FILE="${PROJECT_REL}/docs/ARCHITECTURE.md"
+TYPE_CONTRACT_FILE="${PROJECT_REL}/src/agent/types.ts"
+MODULE_BOUNDARY_PATTERN="^${PROJECT_REL}/src/(agent|tools|config|utils|rag)/"
 
 if [[ ! -f "$ARCH_FILE" ]]; then
   echo "Architecture check failed: missing $ARCH_FILE"

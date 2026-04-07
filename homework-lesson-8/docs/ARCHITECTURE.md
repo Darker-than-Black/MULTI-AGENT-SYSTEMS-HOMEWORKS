@@ -1,6 +1,6 @@
 # Architecture Contract (LangChain + RAG)
 
-This document defines the minimal architecture for `homework-lesson-5`.
+This document defines the minimal architecture for `homework-lesson-8`.
 
 ## 1) Module Boundaries
 
@@ -86,6 +86,7 @@ The base TypeScript checks remain mandatory:
 
 - `npm run check`
 - `npm run invariant:check`
+- `npm run arch:check:staged`
 
 RAG extension work must add dedicated smoke validation for:
 
@@ -93,7 +94,12 @@ RAG extension work must add dedicated smoke validation for:
 - retrieval
 - agent integration with `knowledge_search`
 
-These smoke checks may be introduced in dedicated scripts, but they must exist before the RAG extension is considered complete.
+These smoke checks may be implemented as shell scripts under `scripts/`, but the public validation entrypoints remain:
+
+- `npm run block:check -- <block-id>`
+- `npm run rag:check`
+
+Direct `smoke:*` npm scripts are not part of the public contract.
 
 ## 6) Maintenance Rule
 

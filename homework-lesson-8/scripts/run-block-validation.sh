@@ -10,8 +10,8 @@ if [[ -z "$BLOCK" ]]; then
   exit 2
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-PROJECT_DIR="${REPO_ROOT}/homework-lesson-5"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$PROJECT_DIR"
 
 echo "[block:${BLOCK}] Running shared quality gates..."
@@ -20,13 +20,13 @@ npm run invariant:check
 
 echo "[block:${BLOCK}] Running block-specific validation..."
 case "$BLOCK" in
-  0) npm run smoke:block:0 ;;
-  1) npm run smoke:block:1 ;;
-  2) npm run smoke:block:2 ;;
-  3) npm run smoke:block:3 ;;
-  4) npm run smoke:block:4 ;;
-  5) npm run smoke:block:5 ;;
-  6) npm run smoke:block:6 ;;
+  0) bash scripts/smoke-block-0.sh ;;
+  1) bash scripts/smoke-block-1.sh ;;
+  2) bash scripts/smoke-block-2.sh ;;
+  3) bash scripts/smoke-block-3.sh ;;
+  4) bash scripts/smoke-block-4.sh ;;
+  5) bash scripts/smoke-block-5.sh ;;
+  6) bash scripts/smoke-block-6.sh ;;
   *)
     echo "Unknown block: ${BLOCK}. Expected 0..6."
     exit 2

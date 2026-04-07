@@ -14,6 +14,7 @@ const expected = [
   "read_url",
   "web_search",
   "write_report",
+  "knowledge_search",
 ].sort();
 
 if (JSON.stringify(names) !== JSON.stringify(expected)) {
