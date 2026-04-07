@@ -197,7 +197,7 @@ Prompts усіх ролей мають жити окремо від orchestratio
 - prompt Researcher
 - prompt Critic
 
-у `src/config/*` або `src/agents/prompts/*`.
+у `src/config/prompts.ts`.
 
 Конфігурація середовища залишається в:
 
@@ -220,12 +220,10 @@ homework-lesson-8/
 │   ├── agents/
 │   │   ├── planner.ts
 │   │   ├── researcher.ts
-│   │   ├── critic.ts
-│   │   └── prompts.ts
+│   │   └── critic.ts
 │   ├── schemas/
 │   │   ├── research-plan.ts
-│   │   ├── critique-result.ts
-│   │   └── index.ts
+│   │   └── critique-result.ts
 │   ├── tools/
 │   │   ├── langchain-tools.ts
 │   │   ├── web-search.ts
@@ -238,7 +236,8 @@ homework-lesson-8/
 │   │   ├── store.ts
 │   │   └── types.ts
 │   ├── config/
-│   │   └── env.ts
+│   │   ├── env.ts
+│   │   └── prompts.ts
 │   └── utils/
 ├── docs/
 ├── data/

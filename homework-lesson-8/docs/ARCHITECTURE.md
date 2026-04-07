@@ -13,12 +13,10 @@ src/
 ├── agents/
 │   ├── planner.ts
 │   ├── researcher.ts
-│   ├── critic.ts
-│   └── prompts.ts
+│   └── critic.ts
 ├── schemas/
 │   ├── research-plan.ts
-│   ├── critique-result.ts
-│   └── index.ts
+│   └── critique-result.ts
 ├── tools/
 │   ├── langchain-tools.ts
 │   ├── web-search.ts
@@ -31,7 +29,8 @@ src/
 │   ├── store.ts
 │   └── types.ts
 ├── config/
-│   └── env.ts
+│   ├── env.ts
+│   └── prompts.ts
 └── utils/
 ```
 

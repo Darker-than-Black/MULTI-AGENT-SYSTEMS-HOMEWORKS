@@ -1,17 +1,23 @@
 import { createAgent } from "langchain";
 import { ChatOpenAI } from "@langchain/openai";
 import { appendAssistantMessage, appendUserMessage } from "./memory.js";
-import { SYSTEM_PROMPT } from "./prompt.js";
-import { langchainTools } from "../tools/langchain-tools.js";
+import {
+  githubGetFileContentTool,
+  githubListDirectoryTool, knowledgeSearchTool,
+  readUrlTool,
+  webSearchTool,
+  writeReportTool
+} from "../tools/langchain-tools.js";
 import type {
   RunAgentTurnInput,
   RunAgentTurnOutput,
   ToolExecutionTrace,
 } from "./types.js";
+import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts.js";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env.js";
 
 if (!OPENAI_API_KEY.trim()) {
-  throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-5/.env.");
+  throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
 }
 
 const model = new ChatOpenAI({
@@ -22,8 +28,15 @@ const model = new ChatOpenAI({
 
 const agent = createAgent({
   model,
-  systemPrompt: SYSTEM_PROMPT.trim(),
-  tools: langchainTools,
+  systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT.trim(),
+  tools: [
+    webSearchTool,
+    readUrlTool,
+    writeReportTool,
+    githubListDirectoryTool,
+    githubGetFileContentTool,
+    knowledgeSearchTool,
+  ],
 });
 
 export async function runAgentTurn(
