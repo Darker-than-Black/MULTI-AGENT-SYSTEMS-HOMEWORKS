@@ -177,4 +177,4 @@ During implementation review, verify these items explicitly:
 
 ## Maintenance Rule
 
-If the implementation plan changes materially, update this document in the same commit as the architectural or validation changes.
+If the implementation plan changes materially, update this document in the same commit as the architectural or validation changes

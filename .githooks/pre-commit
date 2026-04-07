@@ -2,10 +2,38 @@
 
 set -euo pipefail
 
-bash homework-lesson-4/scripts/check-architecture-sync.sh --staged
-bash homework-lesson-4/scripts/check-architecture-invariants.sh
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 
-bash homework-lesson-5/scripts/check-architecture-sync.sh --staged
-bash homework-lesson-5/scripts/check-architecture-invariants.sh
+CHANGED_LESSONS=()
+while IFS= read -r lesson; do
+  [[ -n "$lesson" ]] || continue
+  CHANGED_LESSONS+=("$lesson")
+done < <(
+  git diff --cached --name-only \
+    | grep -E '^homework-lesson-[^/]+/' \
+    | cut -d/ -f1 \
+    | sort -u
+)
 
-bash homework-lesson-8/scripts/validate.sh
+if [[ "${#CHANGED_LESSONS[@]}" -eq 0 ]]; then
+  echo "[pre-commit] No changed lessons detected."
+  exit 0
+fi
+
+for lesson in "${CHANGED_LESSONS[@]}"; do
+  echo "[pre-commit] Running checks for ${lesson}..."
+
+  if [[ -x "${lesson}/scripts/check-architecture-sync.sh" ]]; then
+    bash "${lesson}/scripts/check-architecture-sync.sh" --staged
+  fi
+
+  if [[ -x "${lesson}/scripts/validate.sh" ]]; then
+    bash "${lesson}/scripts/validate.sh"
+    continue
+  fi
+
+  if [[ -x "${lesson}/scripts/check-architecture-invariants.sh" ]]; then
+    bash "${lesson}/scripts/check-architecture-invariants.sh"
+  fi
+done

@@ -2,10 +2,52 @@
 
 set -euo pipefail
 
-bash homework-lesson-4/scripts/check-architecture-sync.sh --upstream
-bash homework-lesson-4/scripts/check-architecture-invariants.sh
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
 
-bash homework-lesson-5/scripts/check-architecture-sync.sh --upstream
-bash homework-lesson-5/scripts/check-architecture-invariants.sh
+collect_changed_files() {
+  if git rev-parse --verify --quiet "@{upstream}" >/dev/null; then
+    git diff --name-only "@{upstream}...HEAD"
+    return
+  fi
 
-bash homework-lesson-8/scripts/validate.sh
+  if git rev-parse --verify --quiet "HEAD~1" >/dev/null; then
+    git diff --name-only "HEAD~1...HEAD"
+    return
+  fi
+
+  git diff --name-only HEAD
+}
+
+CHANGED_LESSONS=()
+while IFS= read -r lesson; do
+  [[ -n "$lesson" ]] || continue
+  CHANGED_LESSONS+=("$lesson")
+done < <(
+  collect_changed_files \
+    | grep -E '^homework-lesson-[^/]+/' \
+    | cut -d/ -f1 \
+    | sort -u
+)
+
+if [[ "${#CHANGED_LESSONS[@]}" -eq 0 ]]; then
+  echo "[pre-push] No changed lessons detected."
+  exit 0
+fi
+
+for lesson in "${CHANGED_LESSONS[@]}"; do
+  echo "[pre-push] Running checks for ${lesson}..."
+
+  if [[ -x "${lesson}/scripts/check-architecture-sync.sh" ]]; then
+    bash "${lesson}/scripts/check-architecture-sync.sh" --upstream
+  fi
+
+  if [[ -x "${lesson}/scripts/validate.sh" ]]; then
+    bash "${lesson}/scripts/validate.sh"
+    continue
+  fi
+
+  if [[ -x "${lesson}/scripts/check-architecture-invariants.sh" ]]; then
+    bash "${lesson}/scripts/check-architecture-invariants.sh"
+  fi
+done
