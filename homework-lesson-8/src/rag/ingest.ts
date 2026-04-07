@@ -11,19 +11,19 @@ import {
   KNOWLEDGE_CORPUS_PATH,
   KNOWLEDGE_DATA_DIR,
   QDRANT_COLLECTION,
-} from "../config/env.js";
+} from "../config/env";
 import {
   deleteKnowledgeChunks,
   loadKnowledgeCorpus,
   saveKnowledgeCorpus,
   upsertKnowledgeChunks,
-} from "./store.js";
+} from "./store";
 import type {
   IngestSummary,
   IngestedDocumentSummary,
   KnowledgeChunkMetadata,
   KnowledgeChunkRecord,
-} from "./types.js";
+} from "./types";
 
 export async function ingestKnowledgeBase(): Promise<IngestSummary> {
   const sourceDocuments = await loadSourceDocuments();

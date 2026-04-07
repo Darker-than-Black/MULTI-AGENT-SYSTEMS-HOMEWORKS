@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { OUTPUT_DIR } from "../config/env.js";
-import { toSafeReportFilename } from "../utils/filenames.js";
-import { ToolExecutionError, ToolInputError } from "./errors.js";
+import { OUTPUT_DIR } from "../config/env";
+import { toSafeReportFilename } from "../utils/filenames";
+import { ToolExecutionError, ToolInputError } from "./errors";
 
 export interface WriteReportArgs {
   filename: string;

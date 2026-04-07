@@ -1,5 +1,5 @@
-import { ToolExecutionError, ToolInputError } from "./errors.js";
-import { githubJsonRequest } from "./github-client.js";
+import { ToolExecutionError, ToolInputError } from "./errors";
+import { githubJsonRequest } from "./github-client";
 
 interface GitHubDirectoryEntry {
   type: string;

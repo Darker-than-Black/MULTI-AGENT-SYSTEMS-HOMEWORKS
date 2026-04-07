@@ -1,8 +1,8 @@
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { MAX_URL_CONTENT_LENGTH } from "../config/env.js";
-import { truncateText } from "../utils/truncate.js";
-import { ToolExecutionError, ToolInputError } from "./errors.js";
+import { MAX_URL_CONTENT_LENGTH } from "../config/env";
+import { truncateText } from "../utils/truncate";
+import { ToolExecutionError, ToolInputError } from "./errors";
 
 export interface ReadUrlArgs {
   url: string;

@@ -1,5 +1,5 @@
-import { GITHUB_TOKEN } from "../config/env.js";
-import { ToolExecutionError } from "./errors.js";
+import { GITHUB_TOKEN } from "../config/env";
+import { ToolExecutionError } from "./errors";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const USER_AGENT = "research-agent";

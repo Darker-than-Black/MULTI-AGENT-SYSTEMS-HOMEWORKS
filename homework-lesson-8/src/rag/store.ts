@@ -10,8 +10,8 @@ import {
   OPENAI_API_KEY,
   QDRANT_COLLECTION,
   QDRANT_URL,
-} from "../config/env.js";
-import type { KnowledgeChunkRecord } from "./types.js";
+} from "../config/env";
+import type { KnowledgeChunkRecord } from "./types";
 
 let cachedEmbeddings: OpenAIEmbeddings | null = null;
 let cachedVectorStore: QdrantVectorStore | null = null;

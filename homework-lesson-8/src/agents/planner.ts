@@ -1,10 +1,10 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
-import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env.js";
-import { PLANNER_SYSTEM_PROMPT } from "../config/prompts.js";
-import { ResearchPlanSchema, type ResearchPlan } from "../schemas/research-plan.js";
-import {knowledgeSearchTool, webSearchTool} from "../tools/langchain-tools.js";
+import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
+import { PLANNER_SYSTEM_PROMPT } from "../config/prompts";
+import { ResearchPlanSchema, type ResearchPlan } from "../schemas/research-plan";
+import {knowledgeSearchTool, webSearchTool} from "../tools/langchain-tools";
 
 export function createPlannerAgent() {
   if (!OPENAI_API_KEY.trim()) {

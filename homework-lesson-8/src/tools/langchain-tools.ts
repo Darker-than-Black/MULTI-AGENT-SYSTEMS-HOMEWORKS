@@ -1,11 +1,11 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import { readUrl } from "./read-url.js";
-import { webSearch } from "./web-search.js";
-import { writeReport } from "./write-report.js";
-import { githubListDirectory } from "./github-list-directory.js";
-import { githubGetFileContent } from "./github-get-file-content.js";
-import { knowledgeSearch } from "./knowledge-search.js";
+import { readUrl } from "./read-url";
+import { webSearch } from "./web-search";
+import { writeReport } from "./write-report";
+import { githubListDirectory } from "./github-list-directory";
+import { githubGetFileContent } from "./github-get-file-content";
+import { knowledgeSearch } from "./knowledge-search";
 
 export const webSearchTool = tool(
   async ({ query }) =>

@@ -35,6 +35,30 @@ if (plan.searchQueries.length < 1) {
 console.log(JSON.stringify(plan, null, 2));
 '
 
+echo "[validate] Running researcher validation..."
+node --import tsx -e '
+import { research } from "./src/agents/researcher.ts";
+import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
+
+const plan = ResearchPlanSchema.parse({
+  goal: "Explain retrieval-augmented generation using the local knowledge base.",
+  searchQueries: ["What is retrieval-augmented generation?"],
+  sourcesToCheck: ["knowledge_base"],
+  outputFormat: "Short evidence-grounded summary",
+});
+
+const findings = await research({
+  userRequest: "Use the local knowledge base to explain what retrieval-augmented generation is.",
+  plan,
+});
+
+if (!findings.trim()) {
+  throw new Error("Researcher should return non-empty findings.");
+}
+
+console.log(findings);
+'
+
 echo "[validate] Running RAG ingestion validation..."
 bash scripts/smoke-rag-ingest.sh
 

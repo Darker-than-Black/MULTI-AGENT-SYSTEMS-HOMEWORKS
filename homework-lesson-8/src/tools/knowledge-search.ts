@@ -1,6 +1,6 @@
-import { retrieveKnowledge } from "../rag/retriever.js";
-import { truncateText } from "../utils/truncate.js";
-import { ToolExecutionError, ToolInputError } from "./errors.js";
+import { retrieveKnowledge } from "../rag/retriever";
+import { truncateText } from "../utils/truncate";
+import { ToolExecutionError, ToolInputError } from "./errors";
 
 export interface KnowledgeSearchArgs {
   query: string;

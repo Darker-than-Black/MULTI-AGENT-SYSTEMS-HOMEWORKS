@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
-import { MAX_SEARCH_RESULTS } from "../config/env.js";
-import { ToolExecutionError, ToolInputError } from "./errors.js";
+import { MAX_SEARCH_RESULTS } from "../config/env";
+import { ToolExecutionError, ToolInputError } from "./errors";
 
 export interface WebSearchArgs {
   query: string;

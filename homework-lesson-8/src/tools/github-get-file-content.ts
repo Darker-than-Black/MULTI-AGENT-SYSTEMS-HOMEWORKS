@@ -1,6 +1,6 @@
-import { ToolExecutionError, ToolInputError } from "./errors.js";
-import { githubJsonRequest } from "./github-client.js";
-import { truncateText } from "../utils/truncate.js";
+import { ToolExecutionError, ToolInputError } from "./errors";
+import { githubJsonRequest } from "./github-client";
+import { truncateText } from "../utils/truncate";
 
 const MAX_FILE_CONTENT_CHARS = 60000;
 

@@ -1,17 +1,17 @@
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { createSessionMemory } from "./agent/memory.js";
-import { runAgentTurn } from "./agent/run-agent.js";
-import { MAX_ITERATIONS } from "./config/env.js";
-import { writeReport } from "./tools/write-report.js";
-import { buildDatedReportFilename } from "./utils/filenames.js";
+import { createSessionMemory } from "./agent/memory";
+import { runAgentTurn } from "./agent/run-agent";
+import { MAX_ITERATIONS } from "./config/env";
+import { writeReport } from "./tools/write-report";
+import { buildDatedReportFilename } from "./utils/filenames";
 import {
   logAgentAnswer,
   logAgentProcessing,
   logCliHeader,
   logExecutionTrace,
-} from "./utils/logger.js";
+} from "./utils/logger";
 
 async function main(): Promise<void> {
   const sessionMemory = createSessionMemory();

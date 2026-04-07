@@ -7,13 +7,20 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$PROJECT_DIR"
 
 RUN_AGENT_FILE="src/agent/run-agent.ts"
+RESEARCHER_FILE="src/agents/researcher.ts"
 RAG_DIR="src/rag"
 KNOWLEDGE_SEARCH_FILE="src/tools/knowledge-search.ts"
 LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
 
-echo "[invariants] Checking: run-agent uses LangChain createAgent"
-if ! grep -q "createAgent({" "$RUN_AGENT_FILE"; then
-  echo "Invariant violation: run-agent.ts must initialize LangChain agent via createAgent."
+echo "[invariants] Checking: researcher uses LangChain createAgent"
+if ! grep -q "createAgent({" "$RESEARCHER_FILE"; then
+  echo "Invariant violation: researcher.ts must initialize LangChain agent via createAgent."
+  exit 1
+fi
+
+echo "[invariants] Checking: run-agent delegates to researcher runtime"
+if ! grep -q "runResearchTurn" "$RUN_AGENT_FILE"; then
+  echo "Invariant violation: run-agent.ts must delegate to runResearchTurn."
   exit 1
 fi
 

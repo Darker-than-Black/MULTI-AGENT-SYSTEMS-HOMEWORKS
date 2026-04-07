@@ -6,10 +6,10 @@ import {
   KNOWLEDGE_RERANK_TOP_N,
   KNOWLEDGE_TOP_K,
   RERANK_MODEL,
-} from "../config/env.js";
-import { corpusToDocuments, getKnowledgeVectorStore, loadKnowledgeCorpus } from "./store.js";
-import type { HybridRetrievalResult, KnowledgeChunkMetadata, RetrievalCandidate } from "./types.js";
-import { OPENAI_API_KEY } from "../config/env.js";
+} from "../config/env";
+import { corpusToDocuments, getKnowledgeVectorStore, loadKnowledgeCorpus } from "./store";
+import type { HybridRetrievalResult, KnowledgeChunkMetadata, RetrievalCandidate } from "./types";
+import { OPENAI_API_KEY } from "../config/env";
 
 export async function retrieveKnowledge(query: string): Promise<HybridRetrievalResult> {
   const normalizedQuery = query.trim();

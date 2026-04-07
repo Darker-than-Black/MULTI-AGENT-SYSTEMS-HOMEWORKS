@@ -1,4 +1,4 @@
-import type { ToolExecutionTrace } from "../agent/types.js";
+import type { ToolExecutionTrace } from "../agent/types";
 
 export function logCliHeader(): void {
   console.log("Research Agent CLI");

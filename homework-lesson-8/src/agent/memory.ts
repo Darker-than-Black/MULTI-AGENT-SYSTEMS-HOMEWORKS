@@ -1,11 +1,11 @@
 import { AIMessage, HumanMessage, SystemMessage, trimMessages } from "langchain";
-import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts.js";
-import { truncateText } from "../utils/truncate.js";
-import type { AgentMessage } from "./types.js";
+import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts";
+import { truncateText } from "../utils/truncate";
+import type { AgentMessage } from "./types";
 import {
   MAX_MESSAGE_CONTENT_CHARS,
   MAX_SESSION_MESSAGES,
-} from "../config/env.js";
+} from "../config/env";
 
 export interface SessionMemory {
   messages: AgentMessage[];
