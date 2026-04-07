@@ -59,6 +59,33 @@ if (!findings.trim()) {
 console.log(findings);
 '
 
+echo "[validate] Running critic validation..."
+node --import tsx -e '
+import { critique } from "./src/agents/critic.ts";
+import { CritiqueResultSchema } from "./src/schemas/critique-result.ts";
+import { knowledgeSearchTool, readUrlTool, webSearchTool } from "./src/tools/langchain-tools.ts";
+
+const toolNames = [webSearchTool, readUrlTool, knowledgeSearchTool].map((tool) => tool.name).sort();
+const expectedNames = ["knowledge_search", "read_url", "web_search"].sort();
+
+if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
+  throw new Error(`Critic tools mismatch: ${JSON.stringify(toolNames)}`);
+}
+
+const result = await critique({
+  userRequest: "Compare naive RAG and sentence-window retrieval using current web evidence and explain when each approach should be used.",
+  findings: "RAG helps models answer questions better. Sentence-window retrieval is another retrieval approach.",
+});
+
+CritiqueResultSchema.parse(result);
+
+if (result.verdict !== "REVISE") {
+  throw new Error(`Critic should request revision for weak findings. Received ${result.verdict}.`);
+}
+
+console.log(JSON.stringify(result, null, 2));
+'
+
 echo "[validate] Running RAG ingestion validation..."
 bash scripts/smoke-rag-ingest.sh
 

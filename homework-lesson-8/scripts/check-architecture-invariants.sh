@@ -8,6 +8,7 @@ cd "$PROJECT_DIR"
 
 RUN_AGENT_FILE="src/agent/run-agent.ts"
 RESEARCHER_FILE="src/agents/researcher.ts"
+CRITIC_FILE="src/agents/critic.ts"
 RAG_DIR="src/rag"
 KNOWLEDGE_SEARCH_FILE="src/tools/knowledge-search.ts"
 LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
@@ -15,6 +16,12 @@ LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
 echo "[invariants] Checking: researcher uses LangChain createAgent"
 if ! grep -q "createAgent({" "$RESEARCHER_FILE"; then
   echo "Invariant violation: researcher.ts must initialize LangChain agent via createAgent."
+  exit 1
+fi
+
+echo "[invariants] Checking: critic uses LangChain createAgent"
+if [[ -f "$CRITIC_FILE" ]] && ! grep -q "createAgent({" "$CRITIC_FILE"; then
+  echo "Invariant violation: critic.ts must initialize LangChain agent via createAgent."
   exit 1
 fi
 

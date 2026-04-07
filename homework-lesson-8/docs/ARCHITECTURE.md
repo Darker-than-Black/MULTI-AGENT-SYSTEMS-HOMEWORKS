@@ -159,6 +159,7 @@ Validation coverage must include:
 - ingestion
 - retrieval
 - agent integration with `knowledge_search`
+- structured validation for Planner and Critic
 - Supervisor/HITL flow once multi-agent implementation is added
 
 Shell scripts under `scripts/` may still exist as internal building blocks, but the public project validation entrypoint is `npm run validate`.
