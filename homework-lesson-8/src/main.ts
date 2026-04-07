@@ -1,102 +1,9 @@
 import "dotenv/config";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { createSessionMemory } from "./agent/memory.js";
-import { runAgentTurn } from "./agent/run-agent.js";
-import { MAX_ITERATIONS } from "./config/env.js";
-import { writeReport } from "./tools/write-report.js";
-import { buildDatedReportFilename } from "./utils/filenames.js";
-import {
-  logAgentAnswer,
-  logAgentProcessing,
-  logCliHeader,
-  logExecutionTrace,
-} from "./utils/logger.js";
-
-async function main(): Promise<void> {
-  const sessionMemory = createSessionMemory();
-  const cli = createInterface({ input, output });
-
-  logCliHeader();
-
-  try {
-    while (true) {
-      const rawUserInput = await askQuestion(cli, "You: ");
-      if (rawUserInput === null) {
-        break;
-      }
-
-      const userInput = rawUserInput.trim();
-
-      if (!userInput) {
-        continue;
-      }
-
-      const command = userInput.toLowerCase();
-      if (["exit", "quit"].includes(command)) {
-        break;
-      }
-
-      try {
-        logAgentProcessing();
-        const response = await runAgentTurn({
-          userInput,
-          memory: sessionMemory.messages,
-          maxIterations: MAX_ITERATIONS,
-        });
-
-        logExecutionTrace(response.toolExecutions);
-        logAgentAnswer(response.finalAnswer);
-
-        if (!response.wroteReport) {
-          const rawSaveAnswer = await askQuestion(
-            cli,
-            "Save this answer as markdown report? (y/N): ",
-          );
-          if (rawSaveAnswer === null) {
-            break;
-          }
-          const saveAnswer = rawSaveAnswer.trim().toLowerCase();
-
-          if (["yes", "y"].includes(saveAnswer)) {
-            const rawFilenameInput = await askQuestion(
-              cli,
-              "Optional filename suffix (default uses date only): ",
-            );
-            if (rawFilenameInput === null) {
-              break;
-            }
-            const filenameInput = rawFilenameInput.trim();
-            const filename = buildDatedReportFilename(filenameInput);
-
-            try {
-              const saveResult = await writeReport({ filename, content: response.finalAnswer });
-              console.log(`${saveResult}\n`);
-            } catch (error: unknown) {
-              const message =
-                error instanceof Error ? error.message : "Unknown save error.";
-              console.error(`Report save warning: ${message}\n`);
-            }
-          } else {
-            console.log("Skipped report save.\n");
-          }
-        }
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "Unknown application error.";
-        console.error(`Application warning: ${message}\n`);
-      }
-    }
-  } finally {
-    cli.close();
-  }
-}
-
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : "Unknown fatal error.";
-  console.error(`Application error: ${message}`);
-  process.exitCode = 1;
-});
+import { Command } from "@langchain/langgraph";
+import { randomUUID } from "node:crypto";
+import { supervisorAgent } from "./supervisor.js";
 
 async function askQuestion(
   cli: ReturnType<typeof createInterface>,
@@ -111,3 +18,91 @@ async function askQuestion(
     throw error;
   }
 }
+
+async function main(): Promise<void> {
+  const cli = createInterface({ input, output });
+  const thread_id = randomUUID();
+  const config = { configurable: { thread_id } };
+
+  console.log("=========================================");
+  console.log("🤖 Multi-Agent Supervisor (hw-8) Started");
+  console.log("=========================================\n");
+
+  try {
+    while (true) {
+      const rawUserInput = await askQuestion(cli, "\nYou: ");
+      if (rawUserInput === null) break;
+      const userInput = rawUserInput.trim();
+      if (!userInput) continue;
+      if (["exit", "quit"].includes(userInput.toLowerCase())) break;
+
+      let isInvoking = true;
+      let currentStateInput: any = { messages: [{ role: "user", content: userInput }] };
+
+      while (isInvoking) {
+        console.log("⏳ Processing graph...");
+        
+        // This will block until completion or interrupt
+        const result = await supervisorAgent.invoke(currentStateInput, config);
+
+        // LangGraph persists the state. We check if there are pending tasks (interrupts)
+        const state = await supervisorAgent.getState(config);
+        
+        if (state.next && state.next.length > 0 && state.tasks && state.tasks.find((t: any) => t.interrupts && t.interrupts.length > 0)) {
+          // Find the active interrupt
+          const task = state.tasks.find((t: any) => t.interrupts && t.interrupts.length > 0);
+          if (!task) {
+            isInvoking = false;
+            break;
+          }
+          const interruptValue = task.interrupts[0].value;
+          
+          if (interruptValue?.type === "save_report") {
+            console.log("\n============================================================");
+            console.log("⏸️  ACTION REQUIRES APPROVAL (HITL)");
+            console.log("============================================================");
+            console.log(`Tool: save_report`);
+            console.log(`Args: ${JSON.stringify(interruptValue.args, null, 2)}\n`);
+
+            const action = await askQuestion(cli, "👉 approve / edit / reject: ");
+            if (action === null) break;
+
+            const decisionType = action.trim().toLowerCase();
+
+            if (decisionType === "edit") {
+              const feedback = await askQuestion(cli, "✏️  Your feedback: ");
+              currentStateInput = new Command({ 
+                resume: { decisions: [{ type: "edit", edited_action: { feedback } }] } 
+              });
+            } else if (decisionType === "reject") {
+              currentStateInput = new Command({ 
+                resume: { decisions: [{ type: "reject" }] } 
+              });
+            } else {
+              // Default approve
+              currentStateInput = new Command({ 
+                resume: { decisions: [{ type: "approve" }] } 
+              });
+            }
+          } else {
+            // General resume for unknown interrupts
+            currentStateInput = new Command({ resume: null });
+          }
+        } else {
+          // Finished flow
+          isInvoking = false;
+          const lastMessage = result.messages[result.messages.length - 1];
+          console.log(`\nAgent: ${lastMessage.content}`);
+        }
+      }
+    }
+  } finally {
+    cli.close();
+  }
+}
+
+main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`Application error: ${message}`);
+  process.exitCode = 1;
+});

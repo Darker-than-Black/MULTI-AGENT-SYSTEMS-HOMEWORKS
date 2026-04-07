@@ -44,7 +44,8 @@
     "jsdom": "^29.0.1",
     "langchain": "^1.2.36",
     "pdf-parse": "^2.4.5",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@langchain/langgraph": "^0.2.45"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.1",
