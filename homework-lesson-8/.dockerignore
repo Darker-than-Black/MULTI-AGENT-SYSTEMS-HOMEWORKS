@@ -1,0 +1,12 @@
+node_modules
+dist
+output
+.rag
+.git
+.gitignore
+.DS_Store
+.idea
+example_output
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
