@@ -9,11 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "check": "tsc --noEmit",
-    "invariant:check": "bash scripts/check-architecture-invariants.sh",
-    "rag:check": "bash scripts/run-rag-validation.sh",
-    "block:check": "bash scripts/run-block-validation.sh",
-    "arch:check:staged": "bash scripts/check-architecture-sync.sh --staged",
-    "arch:check:upstream": "bash scripts/check-architecture-sync.sh --upstream",
+    "validate": "bash scripts/validate.sh",
     "hooks:install": "bash scripts/install-hooks.sh"
   },
   "engines": {
