@@ -86,6 +86,59 @@ if (result.verdict !== "REVISE") {
 console.log(JSON.stringify(result, null, 2));
 '
 
+echo "[validate] Running supervisor validation..."
+node --import tsx -e '
+import { createSupervisorAgent } from "./src/supervisor/create-supervisor.ts";
+import {
+  parseCritiqueToolResult,
+  parsePlanToolResult,
+  supervisorTools,
+} from "./src/supervisor/supervisor-tools.ts";
+
+const toolNames = supervisorTools.map((tool) => tool.name).sort();
+const expectedNames = ["critique_findings", "plan_research", "run_research"].sort();
+
+if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
+  throw new Error(`Supervisor tools mismatch: ${JSON.stringify(toolNames)}`);
+}
+
+const parsedPlan = parsePlanToolResult(JSON.stringify({
+  goal: "Explain retrieval-augmented generation.",
+  searchQueries: ["What is retrieval-augmented generation?"],
+  sourcesToCheck: ["knowledge_base"],
+  outputFormat: "Concise markdown answer",
+}));
+
+if (parsedPlan.searchQueries.length !== 1) {
+  throw new Error("Supervisor plan parser should preserve structured plan payloads.");
+}
+
+const parsedCritique = parseCritiqueToolResult(JSON.stringify({
+  verdict: "APPROVE",
+  isFresh: true,
+  isComplete: true,
+  isWellStructured: true,
+  strengths: ["Grounded in evidence"],
+  gaps: [],
+  revisionRequests: [],
+}));
+
+if (parsedCritique.verdict !== "APPROVE") {
+  throw new Error("Supervisor critique parser should preserve structured critique payloads.");
+}
+
+const supervisor = createSupervisorAgent();
+if (!supervisor) {
+  throw new Error("Supervisor agent should be created successfully.");
+}
+
+console.log(JSON.stringify({
+  toolNames,
+  parsedPlan,
+  parsedCritique,
+}, null, 2));
+'
+
 echo "[validate] Running RAG ingestion validation..."
 bash scripts/smoke-rag-ingest.sh
 

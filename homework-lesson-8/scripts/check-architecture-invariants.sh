@@ -9,6 +9,8 @@ cd "$PROJECT_DIR"
 RUN_AGENT_FILE="src/agent/run-agent.ts"
 RESEARCHER_FILE="src/agents/researcher.ts"
 CRITIC_FILE="src/agents/critic.ts"
+SUPERVISOR_FILE="src/supervisor/create-supervisor.ts"
+SUPERVISOR_TOOLS_FILE="src/supervisor/supervisor-tools.ts"
 RAG_DIR="src/rag"
 KNOWLEDGE_SEARCH_FILE="src/tools/knowledge-search.ts"
 LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
@@ -25,9 +27,21 @@ if [[ -f "$CRITIC_FILE" ]] && ! grep -q "createAgent({" "$CRITIC_FILE"; then
   exit 1
 fi
 
-echo "[invariants] Checking: run-agent delegates to researcher runtime"
-if ! grep -q "runResearchTurn" "$RUN_AGENT_FILE"; then
-  echo "Invariant violation: run-agent.ts must delegate to runResearchTurn."
+echo "[invariants] Checking: supervisor uses LangChain createAgent"
+if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "createAgent({" "$SUPERVISOR_FILE"; then
+  echo "Invariant violation: create-supervisor.ts must initialize LangChain agent via createAgent."
+  exit 1
+fi
+
+echo "[invariants] Checking: supervisor tools wrap subagents inside src/supervisor"
+if [[ -f "$SUPERVISOR_TOOLS_FILE" ]] && ! grep -q "planResearch" "$SUPERVISOR_TOOLS_FILE"; then
+  echo "Invariant violation: supervisor-tools.ts must wrap the Planner subagent."
+  exit 1
+fi
+
+echo "[invariants] Checking: run-agent delegates to supervisor runtime"
+if ! grep -q "superviseResearch" "$RUN_AGENT_FILE"; then
+  echo "Invariant violation: run-agent.ts must delegate to superviseResearch."
   exit 1
 fi
 

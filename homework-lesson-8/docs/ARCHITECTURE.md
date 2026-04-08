@@ -41,7 +41,8 @@ This is the architectural target state. File names may vary slightly, but respon
 - `src/supervisor/*`
   - Owns top-level orchestration only.
   - Coordinates the `Plan -> Research -> Critique -> Write` cycle.
-  - May assemble agent-as-tool wrappers and HITL middleware wiring.
+  - Owns `Planner`, `Researcher`, and `Critic` agent-as-tool wrappers inside `src/supervisor/supervisor-tools.ts`.
+  - May assemble HITL middleware wiring.
   - Must not contain retrieval logic.
   - Must not embed raw schema definitions inline if they belong in `src/schemas/*`.
 - `src/agents/*`
@@ -160,6 +161,7 @@ Validation coverage must include:
 - retrieval
 - agent integration with `knowledge_search`
 - structured validation for Planner and Critic
+- supervisor orchestration validation through subagent-tools
 - Supervisor/HITL flow once multi-agent implementation is added
 
 Shell scripts under `scripts/` may still exist as internal building blocks, but the public project validation entrypoint is `npm run validate`.

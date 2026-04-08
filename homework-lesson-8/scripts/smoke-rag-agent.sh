@@ -20,11 +20,27 @@ if (!result.finalAnswer.trim()) {
 }
 
 const usedKnowledgeSearch = result.toolExecutions.some((execution) =>
-  execution.call.includes("knowledge_search")
+  execution.call.includes("plan_research")
 );
 
 if (!usedKnowledgeSearch) {
-  throw new Error("Agent should call knowledge_search for the local knowledge base prompt.");
+  throw new Error("Agent should call plan_research for the local knowledge base prompt.");
+}
+
+const usedResearch = result.toolExecutions.some((execution) =>
+  execution.call.includes("run_research")
+);
+
+if (!usedResearch) {
+  throw new Error("Agent should call run_research for the local knowledge base prompt.");
+}
+
+const usedCritique = result.toolExecutions.some((execution) =>
+  execution.call.includes("critique_findings")
+);
+
+if (!usedCritique) {
+  throw new Error("Agent should call critique_findings for the local knowledge base prompt.");
 }
 
 console.log(JSON.stringify({

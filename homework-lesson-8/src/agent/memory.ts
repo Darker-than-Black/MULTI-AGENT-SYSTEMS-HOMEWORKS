@@ -1,5 +1,5 @@
 import { AIMessage, HumanMessage, SystemMessage, trimMessages } from "langchain";
-import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts";
+import { SUPERVISOR_SYSTEM_PROMPT } from "../config/prompts";
 import { truncateText } from "../utils/truncate";
 import type { AgentMessage } from "./types";
 import {
@@ -12,7 +12,7 @@ export interface SessionMemory {
 }
 
 export function createInitialMemory(): AgentMessage[] {
-  return [new SystemMessage(RESEARCH_AGENT_SYSTEM_PROMPT.trim())];
+  return [new SystemMessage(SUPERVISOR_SYSTEM_PROMPT.trim())];
 }
 
 export function createSessionMemory(): SessionMemory {
@@ -49,7 +49,7 @@ async function enforceMemoryBudget(messages: AgentMessage[]): Promise<void> {
   });
 
   if (trimmed.length === 0 || trimmed[0].getType() !== "system") {
-    trimmed.unshift(new SystemMessage(RESEARCH_AGENT_SYSTEM_PROMPT.trim()));
+    trimmed.unshift(new SystemMessage(SUPERVISOR_SYSTEM_PROMPT.trim()));
   }
 
   messages.splice(0, messages.length, ...(trimmed as AgentMessage[]));
