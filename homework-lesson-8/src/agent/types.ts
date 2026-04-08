@@ -1,4 +1,5 @@
 import type { AIMessage, HumanMessage, SystemMessage } from "langchain";
+import type { ProgressLogger } from "../utils/progress";
 
 export type AgentMessage = SystemMessage | HumanMessage | AIMessage;
 
@@ -6,6 +7,7 @@ export interface RunAgentTurnInput {
   userInput: string;
   memory: AgentMessage[];
   maxIterations: number;
+  onProgress?: ProgressLogger;
 }
 
 export interface RunAgentTurnOutput {

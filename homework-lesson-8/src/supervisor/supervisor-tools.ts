@@ -5,9 +5,46 @@ import { planResearch } from "../agents/planner";
 import { research } from "../agents/researcher";
 import { CritiqueResultSchema } from "../schemas/critique-result";
 import { ResearchPlanSchema } from "../schemas/research-plan";
+import type { ProgressLogger } from "../utils/progress";
+
+let progressLogger: ProgressLogger | undefined;
+
+export function setSupervisorProgressLogger(logger?: ProgressLogger): void {
+  progressLogger = logger;
+}
+
+function emitSupervisorProgress(
+  scope: "planner" | "researcher" | "critic",
+  phase: "start" | "success" | "error",
+  message: string,
+  detail?: string,
+): void {
+  progressLogger?.({
+    scope,
+    phase,
+    message,
+    detail,
+  });
+}
 
 export const planResearchTool = tool(
-  async ({ userRequest }) => JSON.stringify(await planResearch(userRequest), null, 2),
+  async ({ userRequest }) => {
+    emitSupervisorProgress("planner", "start", "Planner started", userRequest);
+    try {
+      const result = await planResearch(userRequest);
+      emitSupervisorProgress(
+        "planner",
+        "success",
+        "Planner finished",
+        `${result.searchQueries.length} search quer${result.searchQueries.length === 1 ? "y" : "ies"}`,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown planner error.";
+      emitSupervisorProgress("planner", "error", "Planner failed", message);
+      throw error;
+    }
+  },
   {
     name: "plan_research",
     description: "Create a structured research plan for the user's request. Must be called first.",
@@ -18,12 +55,35 @@ export const planResearchTool = tool(
 );
 
 export const runResearchTool = tool(
-  async ({ userRequest, plan, critiqueFeedback }) =>
-    research({
-      userRequest,
-      plan: ResearchPlanSchema.parse(plan),
-      critiqueFeedback,
-    }),
+  async ({ userRequest, plan, critiqueFeedback }) => {
+    const normalizedPlan = ResearchPlanSchema.parse(plan);
+    const feedbackCount = critiqueFeedback?.length ?? 0;
+    emitSupervisorProgress(
+      "researcher",
+      "start",
+      "Researcher started",
+      `goal=${normalizedPlan.goal}${feedbackCount > 0 ? `, revisions=${feedbackCount}` : ""}`,
+    );
+
+    try {
+      const findings = await research({
+        userRequest,
+        plan: normalizedPlan,
+        critiqueFeedback,
+      });
+      emitSupervisorProgress(
+        "researcher",
+        "success",
+        "Researcher finished",
+        `${findings.trim().length} chars`,
+      );
+      return findings;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown researcher error.";
+      emitSupervisorProgress("researcher", "error", "Researcher failed", message);
+      throw error;
+    }
+  },
   {
     name: "run_research",
     description: "Execute the research plan and return evidence-grounded findings. Use critique feedback when a revision is requested.",
@@ -36,7 +96,23 @@ export const runResearchTool = tool(
 );
 
 export const critiqueFindingsTool = tool(
-  async ({ userRequest, findings }) => JSON.stringify(await critique({ userRequest, findings }), null, 2),
+  async ({ userRequest, findings }) => {
+    emitSupervisorProgress("critic", "start", "Critic started");
+    try {
+      const result = await critique({ userRequest, findings });
+      emitSupervisorProgress(
+        "critic",
+        "success",
+        "Critic finished",
+        `verdict=${result.verdict}${result.revisionRequests.length > 0 ? `, revisions=${result.revisionRequests.length}` : ""}`,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown critic error.";
+      emitSupervisorProgress("critic", "error", "Critic failed", message);
+      throw error;
+    }
+  },
   {
     name: "critique_findings",
     description: "Review research findings for freshness, completeness, and structure. Returns a structured critique verdict.",

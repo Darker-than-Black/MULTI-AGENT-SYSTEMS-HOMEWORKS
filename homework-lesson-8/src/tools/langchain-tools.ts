@@ -1,5 +1,6 @@
 import { tool } from "langchain";
 import { z } from "zod";
+import type { ProgressLogger } from "../utils/progress";
 import { readUrl } from "./read-url";
 import { webSearch } from "./web-search";
 import { writeReport } from "./write-report";
@@ -7,11 +8,74 @@ import { githubListDirectory } from "./github-list-directory";
 import { githubGetFileContent } from "./github-get-file-content";
 import { knowledgeSearch } from "./knowledge-search";
 
+let progressLogger: ProgressLogger | undefined;
+
+export function setToolProgressLogger(logger?: ProgressLogger): void {
+  progressLogger = logger;
+}
+
+function emitToolProgress(
+  phase: "start" | "success" | "error",
+  message: string,
+  detail?: string,
+): void {
+  progressLogger?.({
+    scope: "tool",
+    phase,
+    message,
+    detail,
+  });
+}
+
+function summarizeToolResult(result: unknown): string | undefined {
+  if (typeof result === "string") {
+    const normalized = result.trim();
+    if (!normalized) {
+      return undefined;
+    }
+    return normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+  }
+
+  if (Array.isArray(result)) {
+    return `${result.length} item(s)`;
+  }
+
+  if (typeof result === "object" && result !== null) {
+    return "Completed.";
+  }
+
+  if (result === undefined || result === null) {
+    return undefined;
+  }
+
+  return String(result);
+}
+
+async function withToolProgress<T>(
+  toolName: string,
+  inputLabel: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  emitToolProgress("start", `${toolName} started`, inputLabel);
+
+  try {
+    const result = await action();
+    emitToolProgress("success", `${toolName} finished`, summarizeToolResult(result));
+    return result;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown tool error.";
+    emitToolProgress("error", `${toolName} failed`, message);
+    throw error;
+  }
+}
+
 export const webSearchTool = tool(
   async ({ query }) =>
-    webSearch({
-      query,
-    }),
+    withToolProgress(
+      "web_search",
+      `query=${JSON.stringify(query)}`,
+      () => webSearch({ query }),
+    ),
   {
     name: "web_search",
     description: "Search the web for external or recent sources. Use when the user asks for current information, web comparison, or web references.",
@@ -23,9 +87,11 @@ export const webSearchTool = tool(
 
 export const readUrlTool = tool(
   async ({ url }) =>
-    readUrl({
-      url,
-    }),
+    withToolProgress(
+      "read_url",
+      `url=${url}`,
+      () => readUrl({ url }),
+    ),
   {
     name: "read_url",
     description: "Read and extract text from a selected web page. Use after web_search when the user asks to inspect or compare source content.",
@@ -42,10 +108,11 @@ export const readUrlTool = tool(
 
 export const writeReportTool = tool(
   async ({ filename, content }) =>
-    writeReport({
-      filename,
-      content,
-    }),
+    withToolProgress(
+      "write_report",
+      `filename=${filename}`,
+      () => writeReport({ filename, content }),
+    ),
   {
     name: "write_report",
     description: "Save a markdown report to the output directory. Use when the user asks to save or export the result.",
@@ -58,12 +125,11 @@ export const writeReportTool = tool(
 
 export const githubListDirectoryTool = tool(
   async ({ owner, repo, path, ref }) =>
-    githubListDirectory({
-      owner,
-      repo,
-      path,
-      ref,
-    }),
+    withToolProgress(
+      "github_list_directory",
+      `owner=${owner}, repo=${repo}, path=${path}${ref ? `, ref=${ref}` : ""}`,
+      () => githubListDirectory({ owner, repo, path, ref }),
+    ),
   {
     name: "github_list_directory",
     description: "List files and directories in a specific GitHub repository path.",
@@ -78,12 +144,11 @@ export const githubListDirectoryTool = tool(
 
 export const githubGetFileContentTool = tool(
   async ({ owner, repo, path, ref }) =>
-    githubGetFileContent({
-      owner,
-      repo,
-      path,
-      ref,
-    }),
+    withToolProgress(
+      "github_get_file_content",
+      `owner=${owner}, repo=${repo}, path=${path}${ref ? `, ref=${ref}` : ""}`,
+      () => githubGetFileContent({ owner, repo, path, ref }),
+    ),
   {
     name: "github_get_file_content",
     description: "Read a file content from a GitHub repository.",
@@ -98,9 +163,11 @@ export const githubGetFileContentTool = tool(
 
 export const knowledgeSearchTool = tool(
   async ({ query }) =>
-    knowledgeSearch({
-      query,
-    }),
+    withToolProgress(
+      "knowledge_search",
+      `query=${JSON.stringify(query)}`,
+      () => knowledgeSearch({ query }),
+    ),
   {
     name: "knowledge_search",
     description: "Search the local ingested knowledge base with hybrid retrieval and reranking.",

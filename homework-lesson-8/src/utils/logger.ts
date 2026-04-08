@@ -1,12 +1,19 @@
 import type { ToolExecutionTrace } from "../agent/types";
+import type { ProgressLogEvent } from "./progress";
 
 export function logCliHeader(): void {
-  console.log("Research Agent CLI");
+  console.log("Multi-Agent Research CLI");
   console.log("Type your question, or 'exit'/'quit' to stop.\n");
 }
 
 export function logAgentProcessing(): void {
   console.log("Agent: processing...\n");
+}
+
+export function logProgressEvent(event: ProgressLogEvent): void {
+  const label = `[${event.scope}:${event.phase}]`;
+  const suffix = event.detail ? ` ${event.detail}` : "";
+  console.log(`${label} ${event.message}${suffix}`);
 }
 
 export function logExecutionTrace(toolExecutions: ToolExecutionTrace[]): void {

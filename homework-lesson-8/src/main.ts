@@ -10,7 +10,7 @@ import {
   logAgentAnswer,
   logAgentProcessing,
   logCliHeader,
-  logExecutionTrace,
+  logProgressEvent,
 } from "./utils/logger";
 
 async function main(): Promise<void> {
@@ -43,9 +43,9 @@ async function main(): Promise<void> {
           userInput,
           memory: sessionMemory.messages,
           maxIterations: MAX_ITERATIONS,
+          onProgress: logProgressEvent,
         });
 
-        logExecutionTrace(response.toolExecutions);
         logAgentAnswer(response.finalAnswer);
 
         if (!response.wroteReport) {
