@@ -32,5 +32,4 @@ export const CritiqueResultSchema = z
     }
   });
 
-export type CritiqueVerdict = z.infer<typeof CritiqueVerdictSchema>;
 export type CritiqueResult = z.infer<typeof CritiqueResultSchema>;

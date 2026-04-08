@@ -9,5 +9,4 @@ export const ResearchPlanSchema = z.object({
   outputFormat: z.string().trim().min(1),
 });
 
-export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
 export type ResearchPlan = z.infer<typeof ResearchPlanSchema>;
