@@ -5,7 +5,7 @@ import { planResearch } from "../agents/planner";
 import { research } from "../agents/researcher";
 import { CritiqueResultSchema } from "../schemas/critique-result";
 import { ResearchPlanSchema } from "../schemas/research-plan";
-import type { ProgressLogger } from "../utils/progress";
+import type { ProgressLogger } from "../utils/logger";
 
 let progressLogger: ProgressLogger | undefined;
 
@@ -15,7 +15,7 @@ export function setSupervisorProgressLogger(logger?: ProgressLogger): void {
 
 function emitSupervisorProgress(
   scope: "planner" | "researcher" | "critic",
-  phase: "start" | "success" | "error",
+  phase: "start" | "success" | "error" | "info",
   message: string,
   detail?: string,
 ): void {
@@ -38,6 +38,7 @@ export const planResearchTool = tool(
         "Planner finished",
         `${result.searchQueries.length} search quer${result.searchQueries.length === 1 ? "y" : "ies"}`,
       );
+      emitSupervisorProgress("researcher", "info", "Handing off plan to Researcher");
       return JSON.stringify(result, null, 2);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown planner error.";
@@ -77,6 +78,7 @@ export const runResearchTool = tool(
         "Researcher finished",
         `${findings.trim().length} chars`,
       );
+      emitSupervisorProgress("critic", "info", "Handing findings to Critic");
       return findings;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown researcher error.";
@@ -106,6 +108,9 @@ export const critiqueFindingsTool = tool(
         "Critic finished",
         `verdict=${result.verdict}${result.revisionRequests.length > 0 ? `, revisions=${result.revisionRequests.length}` : ""}`,
       );
+      if (result.verdict === "REVISE") {
+        emitSupervisorProgress("researcher", "info", "Revision requested by Critic");
+      }
       return JSON.stringify(result, null, 2);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown critic error.";

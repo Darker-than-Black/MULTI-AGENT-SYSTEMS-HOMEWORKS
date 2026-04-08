@@ -14,7 +14,7 @@ import {
   supervisorTools,
 } from "./supervisor-tools";
 import { buildToolExecutionTrace, stringifyMessageContent } from "../utils/agent-trace";
-import type { ProgressLogger } from "../utils/progress";
+import type { ProgressLogger } from "../utils/logger";
 
 export interface RunSupervisorOutput {
   finalAnswer: string;
@@ -29,7 +29,13 @@ export interface RunSupervisorOptions {
   onProgress?: ProgressLogger;
 }
 
+let supervisorAgent: ReturnType<typeof createAgent> | null = null;
+
 export function createSupervisorAgent() {
+  if (supervisorAgent) {
+    return supervisorAgent;
+  }
+
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
@@ -40,15 +46,13 @@ export function createSupervisorAgent() {
     apiKey: OPENAI_API_KEY,
   });
 
-  return createAgent({
+  supervisorAgent = createAgent({
     model,
     systemPrompt: SUPERVISOR_SYSTEM_PROMPT.trim(),
     tools: supervisorTools,
   });
-}
 
-export async function superviseResearch(userRequest: string): Promise<RunSupervisorOutput> {
-  return superviseResearchWithOptions(userRequest);
+  return supervisorAgent;
 }
 
 export async function superviseResearchWithOptions(
@@ -67,7 +71,7 @@ export async function superviseResearchWithOptions(
   });
 
   const supervisor = createSupervisorAgent();
-  const recursionLimit = Math.max(18, (options.maxIterations ?? 4) * 6);
+  const recursionLimit = Math.max(12, (options.maxIterations ?? 4) * 4);
 
   setToolProgressLogger(options.onProgress);
   setSupervisorProgressLogger(options.onProgress);
@@ -78,8 +82,12 @@ export async function superviseResearchWithOptions(
       { recursionLimit },
     );
 
-    const assistantMessages = result.messages.filter((message) => message.getType() === "ai");
-    const toolMessages = result.messages.filter((message) => message.getType() === "tool");
+    const assistantMessages = result.messages.filter(
+      (message: typeof result.messages[number]) => message.getType() === "ai",
+    );
+    const toolMessages = result.messages.filter(
+      (message: typeof result.messages[number]) => message.getType() === "tool",
+    );
     const lastAssistant = assistantMessages.at(-1);
     const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
 

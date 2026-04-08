@@ -6,7 +6,13 @@ import { PLANNER_SYSTEM_PROMPT } from "../config/prompts";
 import { ResearchPlanSchema, type ResearchPlan } from "../schemas/research-plan";
 import {knowledgeSearchTool, webSearchTool} from "../tools/langchain-tools";
 
+let plannerAgent: ReturnType<typeof createAgent> | null = null;
+
 export function createPlannerAgent() {
+  if (plannerAgent) {
+    return plannerAgent;
+  }
+
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
@@ -17,12 +23,14 @@ export function createPlannerAgent() {
     apiKey: OPENAI_API_KEY,
   });
 
-  return createAgent({
+  plannerAgent = createAgent({
     model,
     systemPrompt: PLANNER_SYSTEM_PROMPT.trim(),
     tools: [webSearchTool, knowledgeSearchTool],
     responseFormat: ResearchPlanSchema,
   });
+
+  return plannerAgent;
 }
 
 export async function planResearch(userRequest: string): Promise<ResearchPlan> {
@@ -34,7 +42,7 @@ export async function planResearch(userRequest: string): Promise<ResearchPlan> {
   const planner = createPlannerAgent();
   const result = await planner.invoke(
     { messages: [new HumanMessage(normalizedRequest)] },
-    { recursionLimit: 10 },
+    { recursionLimit: 8 },
   );
 
   if (!("structuredResponse" in result) || result.structuredResponse === undefined) {

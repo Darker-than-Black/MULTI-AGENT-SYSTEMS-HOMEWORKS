@@ -1,5 +1,5 @@
 import type { AIMessage, HumanMessage, SystemMessage } from "langchain";
-import type { ProgressLogger } from "../utils/progress";
+import type { ProgressLogger } from "../utils/logger";
 
 export type AgentMessage = SystemMessage | HumanMessage | AIMessage;
 

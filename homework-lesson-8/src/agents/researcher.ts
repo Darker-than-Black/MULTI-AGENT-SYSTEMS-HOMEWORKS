@@ -25,7 +25,13 @@ export interface ResearchInput {
   critiqueFeedback?: string[];
 }
 
+let researcherAgent: ReturnType<typeof createAgent> | null = null;
+
 export function createResearcherAgent() {
+  if (researcherAgent) {
+    return researcherAgent;
+  }
+
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
@@ -36,7 +42,7 @@ export function createResearcherAgent() {
     apiKey: OPENAI_API_KEY,
   });
 
-  return createAgent({
+  researcherAgent = createAgent({
     model,
     systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT.trim(),
     tools: [
@@ -48,6 +54,8 @@ export function createResearcherAgent() {
       knowledgeSearchTool,
     ],
   });
+
+  return researcherAgent;
 }
 
 export async function research(input: ResearchInput): Promise<string> {
@@ -59,7 +67,7 @@ export async function research(input: ResearchInput): Promise<string> {
   const researcher = createResearcherAgent();
   const result = await researcher.invoke(
     { messages: [new HumanMessage(buildResearchPrompt(input))] },
-    { recursionLimit: 12 },
+    { recursionLimit: 10 },
   );
 
   const lastMessage = result.messages.at(-1);
@@ -75,15 +83,19 @@ export async function runResearchTurn(
   const researcher = createResearcherAgent();
   const startIndex = memory.length;
   // Multi-tool runs can require several AI -> tool -> observation cycles per user request.
-  const recursionLimit = Math.max(12, maxIterations * 4);
+  const recursionLimit = Math.max(10, maxIterations * 3);
   const result = await researcher.invoke(
     { messages: memory },
     { recursionLimit },
   );
 
   const generatedMessages = result.messages.slice(startIndex);
-  const assistantMessages = generatedMessages.filter((message) => message.getType() === "ai");
-  const toolMessages = generatedMessages.filter((message) => message.getType() === "tool");
+  const assistantMessages = generatedMessages.filter(
+    (message: typeof generatedMessages[number]) => message.getType() === "ai",
+  );
+  const toolMessages = generatedMessages.filter(
+    (message: typeof generatedMessages[number]) => message.getType() === "tool",
+  );
 
   const lastAssistant = assistantMessages.at(-1);
   const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";

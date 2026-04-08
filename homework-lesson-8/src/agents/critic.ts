@@ -11,7 +11,13 @@ export interface CritiqueInput {
   findings: string;
 }
 
+let criticAgent: ReturnType<typeof createAgent> | null = null;
+
 export function createCriticAgent() {
+  if (criticAgent) {
+    return criticAgent;
+  }
+
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
@@ -22,12 +28,14 @@ export function createCriticAgent() {
     apiKey: OPENAI_API_KEY,
   });
 
-  return createAgent({
+  criticAgent = createAgent({
     model,
     systemPrompt: CRITIC_SYSTEM_PROMPT.trim(),
     tools: [webSearchTool, readUrlTool, knowledgeSearchTool],
     responseFormat: CritiqueResultSchema,
   });
+
+  return criticAgent;
 }
 
 export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
@@ -44,7 +52,7 @@ export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
   const critic = createCriticAgent();
   const result = await critic.invoke(
     { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings))] },
-    { recursionLimit: 10 },
+    { recursionLimit: 8 },
   );
 
   if (!("structuredResponse" in result) || result.structuredResponse === undefined) {

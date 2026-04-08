@@ -1,6 +1,6 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import type { ProgressLogger } from "../utils/progress";
+import type { ProgressLogger } from "../utils/logger";
 import { readUrl } from "./read-url";
 import { webSearch } from "./web-search";
 import { writeReport } from "./write-report";

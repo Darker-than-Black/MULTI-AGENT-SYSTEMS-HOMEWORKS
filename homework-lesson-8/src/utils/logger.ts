@@ -1,5 +1,37 @@
-import type { ToolExecutionTrace } from "../agent/types";
-import type { ProgressLogEvent } from "./progress";
+export type ProgressLogScope =
+  | "supervisor"
+  | "planner"
+  | "researcher"
+  | "critic"
+  | "tool";
+
+export type ProgressLogPhase = "start" | "success" | "error" | "info";
+
+export interface ProgressLogEvent {
+  scope: ProgressLogScope;
+  phase: ProgressLogPhase;
+  message: string;
+  detail?: string;
+}
+
+export type ProgressLogger = (event: ProgressLogEvent) => void;
+
+const SCOPE_META: Record<ProgressLogScope, { icon: string; label: string }> = {
+  supervisor: { icon: "🧭", label: "Supervisor" },
+  planner: { icon: "🗺️", label: "Planner" },
+  researcher: { icon: "🔎", label: "Researcher" },
+  critic: { icon: "🧪", label: "Critic" },
+  tool: { icon: "🛠️", label: "Tool" },
+};
+
+const PHASE_META: Record<ProgressLogPhase, { icon: string; label: string }> = {
+  start: { icon: "▶️", label: "Start" },
+  success: { icon: "✅", label: "Done" },
+  error: { icon: "❌", label: "Error" },
+  info: { icon: "ℹ️", label: "Info" },
+};
+
+let lastRenderedScope: ProgressLogScope | null = null;
 
 export function logCliHeader(): void {
   console.log("Multi-Agent Research CLI");
@@ -7,31 +39,29 @@ export function logCliHeader(): void {
 }
 
 export function logAgentProcessing(): void {
-  console.log("Agent: processing...\n");
+  lastRenderedScope = null;
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("🤖 Agent is processing your request...\n");
 }
 
 export function logProgressEvent(event: ProgressLogEvent): void {
-  const label = `[${event.scope}:${event.phase}]`;
-  const suffix = event.detail ? ` ${event.detail}` : "";
-  console.log(`${label} ${event.message}${suffix}`);
-}
+  const scopeMeta = SCOPE_META[event.scope];
+  const phaseMeta = PHASE_META[event.phase];
 
-export function logExecutionTrace(toolExecutions: ToolExecutionTrace[]): void {
-  if (toolExecutions.length === 0) {
-    console.log("ℹ️ Tools were not called for this response.\n");
-    return;
-  }
-
-  for (const execution of toolExecutions) {
-    console.log(`🔧 Tool call: ${execution.call}`);
-    console.log(`📎 Result: ${execution.resultSummary}`);
-    for (const detail of execution.details) {
-      console.log(`   - ${detail}`);
+  if (lastRenderedScope !== event.scope) {
+    if (lastRenderedScope !== null) {
+      console.log("────────────────────────────────────────");
     }
-    console.log("");
+    console.log(`${scopeMeta.icon} ${scopeMeta.label}`);
+    lastRenderedScope = event.scope;
   }
+
+  const detailSuffix = event.detail ? `\n   ${event.detail}` : "";
+  console.log(`  ${phaseMeta.icon} ${event.message}${detailSuffix}`);
 }
 
 export function logAgentAnswer(answer: string): void {
+  lastRenderedScope = null;
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`Agent: ${answer}\n`);
 }
