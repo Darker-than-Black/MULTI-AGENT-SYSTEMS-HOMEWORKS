@@ -6,6 +6,10 @@ import type {
   RunAgentTurnInput,
   RunAgentTurnOutput,
 } from "../agent/types";
+import {
+  getResearchTurnRecursionLimit,
+  getResearchWorkflowRecursionLimit,
+} from "../config/agent-policy";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts";
 import type { ResearchPlan } from "../schemas/research-plan";
@@ -63,7 +67,7 @@ export async function research(input: ResearchInput): Promise<string> {
   }
 
   const researcher = createResearcherAgent();
-  const recursionLimit = Math.max(14, input.plan.searchQueries.length * 4 + 2);
+  const recursionLimit = getResearchWorkflowRecursionLimit(input.plan.searchQueries.length);
   const result = await researcher.invoke(
     { messages: [new HumanMessage(buildResearchPrompt(input))] },
     { recursionLimit },
@@ -82,7 +86,7 @@ export async function runResearchTurn(
   const researcher = createResearcherAgent();
   const startIndex = memory.length;
   // Multi-tool runs can require several AI -> tool -> observation cycles per user request.
-  const recursionLimit = Math.max(10, maxIterations * 3);
+  const recursionLimit = getResearchTurnRecursionLimit(maxIterations);
   const result = await researcher.invoke(
     { messages: memory },
     { recursionLimit },

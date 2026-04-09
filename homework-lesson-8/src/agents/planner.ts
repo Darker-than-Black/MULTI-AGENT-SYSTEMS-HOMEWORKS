@@ -1,10 +1,11 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
+import { getPlannerRecursionLimit } from "../config/agent-policy";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { PLANNER_SYSTEM_PROMPT } from "../config/prompts";
 import { ResearchPlanSchema, type ResearchPlan } from "../schemas/research-plan";
-import {knowledgeSearchTool, webSearchTool} from "../tools/langchain-tools";
+import { knowledgeSearchTool, webSearchTool } from "../tools/langchain-tools";
 
 let plannerAgent: ReturnType<typeof createAgent> | null = null;
 
@@ -42,7 +43,7 @@ export async function planResearch(userRequest: string): Promise<ResearchPlan> {
   const planner = createPlannerAgent();
   const result = await planner.invoke(
     { messages: [new HumanMessage(normalizedRequest)] },
-    { recursionLimit: 8 },
+    { recursionLimit: getPlannerRecursionLimit() },
   );
 
   if (!("structuredResponse" in result) || result.structuredResponse === undefined) {

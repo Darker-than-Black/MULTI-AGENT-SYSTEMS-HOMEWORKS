@@ -10,10 +10,10 @@ echo "[validate] Running TypeScript check..."
 npm run check
 
 echo "[validate] Running architecture invariants..."
-bash scripts/check-architecture-invariants.sh
+npm run invariant:check
 
 echo "[validate] Running planner validation..."
-node --import tsx -e '
+node --input-type=module --import tsx -e '
 import { planResearch } from "./src/agents/planner.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
 import { knowledgeSearchTool, webSearchTool } from "./src/tools/langchain-tools.ts";
@@ -36,7 +36,7 @@ console.log(JSON.stringify(plan, null, 2));
 '
 
 echo "[validate] Running researcher validation..."
-node --import tsx -e '
+node --input-type=module --import tsx -e '
 import { research } from "./src/agents/researcher.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
 
@@ -60,7 +60,7 @@ console.log(findings);
 '
 
 echo "[validate] Running critic validation..."
-node --import tsx -e '
+node --input-type=module --import tsx -e '
 import { critique } from "./src/agents/critic.ts";
 import { CritiqueResultSchema } from "./src/schemas/critique-result.ts";
 import { knowledgeSearchTool, readUrlTool, webSearchTool } from "./src/tools/langchain-tools.ts";
@@ -97,7 +97,7 @@ if ! grep -q "MemorySaver" "src/supervisor/create-supervisor.ts"; then
   exit 1
 fi
 
-node --import tsx -e '
+node --input-type=module --import tsx -e '
 import { createSupervisorAgent } from "./src/supervisor/create-supervisor.ts";
 import {
   parseCritiqueToolResult,
@@ -149,13 +149,10 @@ console.log(JSON.stringify({
 }, null, 2));
 '
 
-echo "[validate] Running RAG ingestion validation..."
-bash scripts/smoke-rag-ingest.sh
+echo "[validate] Running deterministic multi-agent workflow validation..."
+bash scripts/smoke-multi-agent-flow.sh
 
-echo "[validate] Running retrieval validation..."
-bash scripts/smoke-rag-retrieval.sh
-
-echo "[validate] Running agent integration validation..."
-bash scripts/smoke-rag-agent.sh
+echo "[validate] Running RAG smoke suite..."
+npm run rag:check
 
 echo "[validate] All validations passed."

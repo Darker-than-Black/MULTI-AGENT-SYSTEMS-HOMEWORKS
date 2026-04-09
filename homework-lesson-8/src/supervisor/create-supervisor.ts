@@ -8,7 +8,14 @@ import {
   type HITLRequest,
   type HITLResponse,
 } from "langchain";
+import type { LanguageModelLike } from "@langchain/core/language_models/base";
 import type { ToolExecutionTrace } from "../agent/types";
+import {
+  getSupervisorRecursionLimit,
+  SUPERVISOR_ALLOWED_WRITE_REPORT_DECISIONS,
+  SUPERVISOR_MAX_CRITIQUE_PASSES,
+  SUPERVISOR_MAX_RESEARCH_REVISIONS,
+} from "../config/agent-policy";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { SUPERVISOR_SYSTEM_PROMPT } from "../config/prompts";
 import type { CritiqueResult } from "../schemas/critique-result";
@@ -24,8 +31,6 @@ import { buildToolExecutionTrace, stringifyMessageContent } from "../utils/agent
 import type { ProgressLogger } from "../utils/logger";
 
 type AllowedDecision = "approve" | "edit" | "reject";
-const MAX_RESEARCH_REVISIONS = 2;
-const MAX_CRITIQUE_PASSES = MAX_RESEARCH_REVISIONS + 1;
 
 interface SupervisorBaseOutput {
   finalAnswer: string;
@@ -77,13 +82,19 @@ interface PendingReviewState {
   content: string;
 }
 
+interface SupervisorAgentFactoryOptions {
+  model?: LanguageModelLike;
+  systemPrompt?: string;
+  tools?: typeof supervisorTools;
+}
+
 let supervisorAgent: ReturnType<typeof createAgent> | null = null;
 const supervisorCheckpointer = new MemorySaver();
 const pendingReviewStates = new Map<string, PendingReviewState>();
 const hitlMiddleware = humanInTheLoopMiddleware({
   interruptOn: {
     write_report: {
-      allowedDecisions: ["approve", "edit", "reject"],
+      allowedDecisions: [...SUPERVISOR_ALLOWED_WRITE_REPORT_DECISIONS],
       description: (toolCall) => {
         const filename = toNonEmptyString(toolCall.args?.filename) || "report.md";
         return `Review the markdown report before saving it to ${filename}.`;
@@ -92,30 +103,39 @@ const hitlMiddleware = humanInTheLoopMiddleware({
   },
 });
 
-export function createSupervisorAgent() {
-  if (supervisorAgent) {
-    return supervisorAgent;
-  }
-
+function buildDefaultSupervisorModel(): LanguageModelLike {
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
 
-  const model = new ChatOpenAI({
+  return new ChatOpenAI({
     model: MODEL_NAME,
     temperature: TEMPERATURE,
     apiKey: OPENAI_API_KEY,
   });
+}
 
-  supervisorAgent = createAgent({
-    model,
-    systemPrompt: SUPERVISOR_SYSTEM_PROMPT.trim(),
-    tools: supervisorTools,
+export function createSupervisorAgent(
+  options: SupervisorAgentFactoryOptions = {},
+) {
+  const hasOverrides = Boolean(options.model || options.systemPrompt || options.tools);
+  if (!hasOverrides && supervisorAgent) {
+    return supervisorAgent;
+  }
+
+  const agent = createAgent({
+    model: options.model ?? buildDefaultSupervisorModel(),
+    systemPrompt: (options.systemPrompt ?? SUPERVISOR_SYSTEM_PROMPT).trim(),
+    tools: options.tools ?? supervisorTools,
     middleware: [hitlMiddleware],
     checkpointer: supervisorCheckpointer,
   });
 
-  return supervisorAgent;
+  if (!hasOverrides) {
+    supervisorAgent = agent;
+  }
+
+  return agent;
 }
 
 export async function superviseResearchWithOptions(
@@ -207,7 +227,7 @@ async function invokeSupervisor(
   }
 
   const supervisor = createSupervisorAgent();
-  const recursionLimit = Math.max(30, (options.maxIterations ?? 4) * 7);
+  const recursionLimit = getSupervisorRecursionLimit(options.maxIterations);
 
   setToolProgressLogger(options.onProgress);
   setSupervisorProgressLogger(options.onProgress);
@@ -351,7 +371,7 @@ async function requestRevisionContinuation(
   const revisionRequests = critique?.revisionRequests ?? [];
   const followUpPrompt = [
     "Continue the mandatory supervisor workflow.",
-    "The latest Critic verdict is REVISE and you still have revision rounds available.",
+    `The latest Critic verdict is REVISE and you still have revision rounds available within the code-enforced limit of ${SUPERVISOR_MAX_RESEARCH_REVISIONS}.`,
     "Do not call write_report yet.",
     "Call run_research again with the same user request and plan, passing the latest revision requests.",
     "Then call critique_findings again on the revised findings.",
@@ -487,7 +507,7 @@ function shouldContinueRevisionCycle(result: SupervisorBaseOutput): boolean {
     return false;
   }
 
-  return countToolExecutions(result.toolExecutions, "critique_findings(") < MAX_CRITIQUE_PASSES;
+  return countToolExecutions(result.toolExecutions, "critique_findings(") < SUPERVISOR_MAX_CRITIQUE_PASSES;
 }
 
 function shouldRequestWriteReportReview(result: CompletedSupervisorOutput): boolean {
@@ -503,7 +523,7 @@ function shouldRequestWriteReportReview(result: CompletedSupervisorOutput): bool
     return true;
   }
 
-  return countToolExecutions(result.toolExecutions, "critique_findings(") >= MAX_CRITIQUE_PASSES;
+  return countToolExecutions(result.toolExecutions, "critique_findings(") >= SUPERVISOR_MAX_CRITIQUE_PASSES;
 }
 
 function countToolExecutions(toolExecutions: ToolExecutionTrace[], callPrefix: string): number {

@@ -9,6 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "check": "tsc --noEmit",
+    "invariant:check": "bash scripts/check-architecture-invariants.sh",
+    "rag:check": "bash scripts/check-rag-suite.sh",
     "validate": "bash scripts/validate.sh",
     "hooks:install": "bash scripts/install-hooks.sh"
   },

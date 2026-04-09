@@ -1,6 +1,7 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
+import { getCriticRecursionLimit } from "../config/agent-policy";
 import { CritiqueResultSchema, type CritiqueResult } from "../schemas/critique-result";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { CRITIC_SYSTEM_PROMPT } from "../config/prompts";
@@ -52,7 +53,7 @@ export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
   const critic = createCriticAgent();
   const result = await critic.invoke(
     { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings))] },
-    { recursionLimit: 8 },
+    { recursionLimit: getCriticRecursionLimit() },
   );
 
   if (!("structuredResponse" in result) || result.structuredResponse === undefined) {

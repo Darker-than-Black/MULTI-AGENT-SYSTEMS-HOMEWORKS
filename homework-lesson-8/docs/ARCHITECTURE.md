@@ -30,6 +30,7 @@ src/
 │   └── types.ts
 ├── config/
 │   ├── env.ts
+│   ├── agent-policy.ts
 │   └── prompts.ts
 └── utils/
 ```
@@ -73,6 +74,8 @@ This is the architectural target state. File names may vary slightly, but respon
 - `src/config/*`, `src/utils/*`
   - Shared environment config, prompt config, helpers, and presentation utilities.
   - `src/config/env.ts` is the single entry point for environment loading.
+  - `src/config/prompts.ts` owns role/system prompt text only.
+  - `src/config/agent-policy.ts` owns code-enforced guardrails such as revision caps, recursion limits, and allowed HITL decisions.
 
 ## 3) Core Flows
 
@@ -135,6 +138,7 @@ The following categories of configuration must be represented in `src/config/env
   - example: `MAX_SESSION_MESSAGES`, `MAX_URL_CONTENT_LENGTH`, output directory settings
 
 Role prompts for Supervisor, Planner, Researcher, and Critic must be centralized in config-oriented modules rather than duplicated inline across agent files.
+Code-enforced workflow limits and recursion policies must live in config-oriented modules rather than being hardcoded ad hoc across agents and supervisor files.
 
 ## 6) Invariants
 
@@ -148,6 +152,7 @@ Role prompts for Supervisor, Planner, Researcher, and Critic must be centralized
 - `src/main.ts` must remain a CLI and HITL entrypoint, not the place where agent role logic is defined.
 - The report-writing path must be HITL-gated before persistence.
 - Session memory and thread state must support interrupt/resume flows.
+- System prompts guide agent behavior, but hard workflow guarantees must still be enforced in code-level guardrails.
 
 ## 7) Validation Expectations
 
