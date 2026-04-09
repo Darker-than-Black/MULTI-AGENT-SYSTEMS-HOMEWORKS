@@ -7,20 +7,6 @@ import {
   MAX_SESSION_MESSAGES,
 } from "../config/env";
 
-export interface SessionMemory {
-  messages: AgentMessage[];
-}
-
-export function createInitialMemory(): AgentMessage[] {
-  return [new SystemMessage(SUPERVISOR_SYSTEM_PROMPT.trim())];
-}
-
-export function createSessionMemory(): SessionMemory {
-  return {
-    messages: createInitialMemory(),
-  };
-}
-
 export async function appendUserMessage(
   messages: AgentMessage[],
   content: string,

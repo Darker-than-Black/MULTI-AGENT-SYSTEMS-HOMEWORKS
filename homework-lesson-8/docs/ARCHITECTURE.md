@@ -89,6 +89,7 @@ This is the architectural target state. File names may vary slightly, but respon
 9. If verdict is `REVISE`, Supervisor invokes Researcher again with revision feedback.
 10. If verdict is `APPROVE`, Supervisor prepares the final markdown report and calls `write_report`.
 11. If `write_report` is interrupted by HITL middleware, `main.ts` surfaces the pending action and resumes with `approve`, `edit`, or `reject`.
+12. Resume must reuse the same `thread_id`; the runtime must not restart the research cycle from scratch.
 
 ### Offline Ingestion Flow
 

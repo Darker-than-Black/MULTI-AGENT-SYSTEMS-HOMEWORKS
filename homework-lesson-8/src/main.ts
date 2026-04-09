@@ -1,20 +1,25 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { createSessionMemory } from "./agent/memory";
-import { runAgentTurn } from "./agent/run-agent";
 import { MAX_ITERATIONS } from "./config/env";
-import { writeReport } from "./tools/write-report";
-import { buildDatedReportFilename } from "./utils/filenames";
+import {
+  type CompletedSupervisorOutput,
+  type PendingWriteReportReview,
+  type SupervisorResumeDecision,
+  resumeSupervisorWithOptions,
+  superviseResearchWithOptions,
+} from "./supervisor/create-supervisor";
 import {
   logAgentAnswer,
   logAgentProcessing,
   logCliHeader,
+  logPendingReview,
   logProgressEvent,
+  logResumeDecision,
 } from "./utils/logger";
 
 async function main(): Promise<void> {
-  const sessionMemory = createSessionMemory();
   const cli = createInterface({ input, output });
 
   logCliHeader();
@@ -39,48 +44,15 @@ async function main(): Promise<void> {
 
       try {
         logAgentProcessing();
-        const response = await runAgentTurn({
-          userInput,
-          memory: sessionMemory.messages,
+        const threadId = randomUUID();
+        const initialResponse = await superviseResearchWithOptions(userInput, {
+          threadId,
           maxIterations: MAX_ITERATIONS,
           onProgress: logProgressEvent,
         });
+        const response = await resolvePendingReview(cli, initialResponse, threadId);
 
         logAgentAnswer(response.finalAnswer);
-
-        if (!response.wroteReport) {
-          const rawSaveAnswer = await askQuestion(
-            cli,
-            "Save this answer as markdown report? (y/N): ",
-          );
-          if (rawSaveAnswer === null) {
-            break;
-          }
-          const saveAnswer = rawSaveAnswer.trim().toLowerCase();
-
-          if (["yes", "y"].includes(saveAnswer)) {
-            const rawFilenameInput = await askQuestion(
-              cli,
-              "Optional filename suffix (default uses date only): ",
-            );
-            if (rawFilenameInput === null) {
-              break;
-            }
-            const filenameInput = rawFilenameInput.trim();
-            const filename = buildDatedReportFilename(filenameInput);
-
-            try {
-              const saveResult = await writeReport({ filename, content: response.finalAnswer });
-              console.log(`${saveResult}\n`);
-            } catch (error: unknown) {
-              const message =
-                error instanceof Error ? error.message : "Unknown save error.";
-              console.error(`Report save warning: ${message}\n`);
-            }
-          } else {
-            console.log("Skipped report save.\n");
-          }
-        }
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Unknown application error.";
@@ -110,4 +82,114 @@ async function askQuestion(
     }
     throw error;
   }
+}
+
+async function resolvePendingReview(
+  cli: ReturnType<typeof createInterface>,
+  response: Awaited<ReturnType<typeof superviseResearchWithOptions>>,
+  threadId: string,
+): Promise<CompletedSupervisorOutput> {
+  let currentResponse = response;
+
+  while (currentResponse.status === "interrupted") {
+    logPendingReview(currentResponse.pendingReview);
+
+    const decision = await askForDecision(cli, currentResponse.pendingReview.allowedDecisions);
+    if (decision === null) {
+      throw new Error("Review flow was interrupted before a decision was provided.");
+    }
+
+    const resume = await buildResumeDecision(cli, currentResponse.pendingReview, decision);
+    logResumeDecision(decision);
+
+    currentResponse = await resumeSupervisorWithOptions(resume, {
+      threadId,
+      maxIterations: MAX_ITERATIONS,
+      onProgress: logProgressEvent,
+    });
+  }
+
+  return currentResponse;
+}
+
+async function askForDecision(
+  cli: ReturnType<typeof createInterface>,
+  allowedDecisions: string[],
+): Promise<"approve" | "edit" | "reject" | null> {
+  const allowed = new Set(allowedDecisions.map((item) => item.trim().toLowerCase()));
+
+  while (true) {
+    const rawDecision = await askQuestion(cli, "Review decision (approve/edit/reject): ");
+    if (rawDecision === null) {
+      return null;
+    }
+
+    const normalized = rawDecision.trim().toLowerCase();
+    if (
+      (normalized === "approve" || normalized === "edit" || normalized === "reject")
+      && allowed.has(normalized)
+    ) {
+      return normalized;
+    }
+
+    console.log(`Unsupported decision. Allowed: ${allowedDecisions.join(", ")}\n`);
+  }
+}
+
+async function buildResumeDecision(
+  cli: ReturnType<typeof createInterface>,
+  review: PendingWriteReportReview,
+  decision: "approve" | "edit" | "reject",
+): Promise<SupervisorResumeDecision> {
+  if (decision === "approve") {
+    return { type: "approve" };
+  }
+
+  if (decision === "reject") {
+    const reason = await askQuestion(cli, "Optional rejection reason: ");
+    return {
+      type: "reject",
+      message: reason?.trim() || "Report write rejected by the user.",
+    };
+  }
+
+  const feedback = await askMultilineInput(
+    cli,
+    [
+      `Provide revision feedback for "${review.filename}".`,
+      "The Supervisor will restart the full pipeline and regenerate the report.",
+      "Finish with a single line containing EOF.",
+    ].join("\n"),
+  );
+  if (feedback === null) {
+    throw new Error("Review flow was interrupted before revision feedback was provided.");
+  }
+
+  return {
+    type: "edit",
+    feedback: feedback.trim(),
+  };
+}
+
+async function askMultilineInput(
+  cli: ReturnType<typeof createInterface>,
+  prompt: string,
+): Promise<string | null> {
+  console.log(prompt);
+  const lines: string[] = [];
+
+  while (true) {
+    const line = await askQuestion(cli, "");
+    if (line === null) {
+      return null;
+    }
+
+    if (line.trim() === "EOF") {
+      break;
+    }
+
+    lines.push(line);
+  }
+
+  return lines.join("\n");
 }

@@ -15,7 +15,6 @@ import {
   knowledgeSearchTool,
   readUrlTool,
   webSearchTool,
-  writeReportTool,
 } from "../tools/langchain-tools";
 import { buildToolExecutionTrace, stringifyMessageContent } from "../utils/agent-trace";
 
@@ -48,7 +47,6 @@ export function createResearcherAgent() {
     tools: [
       webSearchTool,
       readUrlTool,
-      writeReportTool,
       githubListDirectoryTool,
       githubGetFileContentTool,
       knowledgeSearchTool,
@@ -65,9 +63,10 @@ export async function research(input: ResearchInput): Promise<string> {
   }
 
   const researcher = createResearcherAgent();
+  const recursionLimit = Math.max(14, input.plan.searchQueries.length * 4 + 2);
   const result = await researcher.invoke(
     { messages: [new HumanMessage(buildResearchPrompt(input))] },
-    { recursionLimit: 10 },
+    { recursionLimit },
   );
 
   const lastMessage = result.messages.at(-1);

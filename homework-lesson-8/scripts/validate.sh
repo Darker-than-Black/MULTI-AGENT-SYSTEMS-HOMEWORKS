@@ -87,6 +87,16 @@ console.log(JSON.stringify(result, null, 2));
 '
 
 echo "[validate] Running supervisor validation..."
+if ! grep -q "humanInTheLoopMiddleware" "src/supervisor/create-supervisor.ts"; then
+  echo "Supervisor HITL middleware wiring is missing."
+  exit 1
+fi
+
+if ! grep -q "MemorySaver" "src/supervisor/create-supervisor.ts"; then
+  echo "Supervisor checkpointer wiring is missing."
+  exit 1
+fi
+
 node --import tsx -e '
 import { createSupervisorAgent } from "./src/supervisor/create-supervisor.ts";
 import {
@@ -96,7 +106,7 @@ import {
 } from "./src/supervisor/supervisor-tools.ts";
 
 const toolNames = supervisorTools.map((tool) => tool.name).sort();
-const expectedNames = ["critique_findings", "plan_research", "run_research"].sort();
+const expectedNames = ["critique_findings", "plan_research", "run_research", "write_report"].sort();
 
 if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
   throw new Error(`Supervisor tools mismatch: ${JSON.stringify(toolNames)}`);

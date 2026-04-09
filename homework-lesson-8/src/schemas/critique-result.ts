@@ -15,7 +15,7 @@ export const CritiqueResultSchema = z
     revisionRequests: z.array(nonEmptyText),
   })
   .superRefine((value, context) => {
-    if (value.verdict === "REVISE" && value.revisionRequests.length === 0) {
+    if (value.verdict === "REVISE" && !value.revisionRequests.length) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["revisionRequests"],
@@ -23,7 +23,7 @@ export const CritiqueResultSchema = z
       });
     }
 
-    if (value.verdict === "APPROVE" && value.revisionRequests.length > 0) {
+    if (value.verdict === "APPROVE" && value.revisionRequests.length) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["revisionRequests"],

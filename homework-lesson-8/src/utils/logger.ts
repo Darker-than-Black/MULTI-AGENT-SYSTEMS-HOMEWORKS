@@ -16,6 +16,13 @@ export interface ProgressLogEvent {
 
 export type ProgressLogger = (event: ProgressLogEvent) => void;
 
+export interface PendingReviewPreview {
+  filename: string;
+  content: string;
+  description?: string;
+  allowedDecisions: string[];
+}
+
 const SCOPE_META: Record<ProgressLogScope, { icon: string; label: string }> = {
   supervisor: { icon: "🧭", label: "Supervisor" },
   planner: { icon: "🗺️", label: "Planner" },
@@ -35,7 +42,8 @@ let lastRenderedScope: ProgressLogScope | null = null;
 
 export function logCliHeader(): void {
   console.log("Multi-Agent Research CLI");
-  console.log("Type your question, or 'exit'/'quit' to stop.\n");
+  console.log("Type your question, or 'exit'/'quit' to stop.");
+  console.log("Report writes are gated with approve/edit/reject review.\n");
 }
 
 export function logAgentProcessing(): void {
@@ -64,4 +72,43 @@ export function logAgentAnswer(answer: string): void {
   lastRenderedScope = null;
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`Agent: ${answer}\n`);
+}
+
+export function logPendingReview(preview: PendingReviewPreview): void {
+  lastRenderedScope = null;
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("🛑 Human Review Required");
+  console.log(`📄 File: ${preview.filename}`);
+  console.log(`🧭 Allowed decisions: ${preview.allowedDecisions.join(", ")}`);
+  if (preview.description) {
+    console.log(`📝 ${preview.description}`);
+  }
+  console.log("────────────────────────────────────────");
+  console.log("Preview:");
+  console.log(renderPreview(preview.content));
+  console.log("────────────────────────────────────────");
+}
+
+export function logResumeDecision(decision: "approve" | "edit" | "reject"): void {
+  const messageByDecision = {
+    approve: "✅ Approved report write. Resuming agent...",
+    edit: "✍️ Submitted revision feedback. Supervisor is restarting the workflow...",
+    reject: "⛔ Rejected report write. Resuming agent...",
+  } as const;
+
+  console.log(`${messageByDecision[decision]}\n`);
+}
+
+function renderPreview(content: string): string {
+  const normalized = content.trim();
+  if (!normalized) {
+    return "[empty report content]\n";
+  }
+
+  const maxChars = 1200;
+  const preview = normalized.length > maxChars
+    ? `${normalized.slice(0, maxChars)}\n\n...[truncated]`
+    : normalized;
+
+  return `${preview}\n`;
 }

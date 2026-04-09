@@ -5,15 +5,33 @@ set -euo pipefail
 echo "[smoke:rag:agent] Running agent integration validation..."
 
 node --import tsx -e '
-import { createSessionMemory } from "./src/agent/memory.ts";
-import { runAgentTurn } from "./src/agent/run-agent.ts";
+import { randomUUID } from "node:crypto";
+import { resumeSupervisorWithOptions, superviseResearchWithOptions } from "./src/supervisor/create-supervisor.ts";
 
-const session = createSessionMemory();
-const result = await runAgentTurn({
-  userInput: "Use the local knowledge base to explain what RAG is.",
-  memory: session.messages,
-  maxIterations: 4,
-});
+const threadId = randomUUID();
+let result = await superviseResearchWithOptions(
+  "Use the local knowledge base to explain what RAG is.",
+  {
+    threadId,
+    maxIterations: 4,
+  },
+);
+
+if (result.status === "interrupted") {
+  result = await resumeSupervisorWithOptions(
+    {
+      decisions: [{ type: "reject", message: "Smoke validation rejected write_report." }],
+    },
+    {
+      threadId,
+      maxIterations: 4,
+    },
+  );
+}
+
+if (result.status !== "completed") {
+  throw new Error(`Expected completed supervisor result. Received ${result.status}.`);
+}
 
 if (!result.finalAnswer.trim()) {
   throw new Error("Agent should return a final answer.");

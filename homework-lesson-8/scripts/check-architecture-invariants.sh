@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$PROJECT_DIR"
 
-RUN_AGENT_FILE="src/agent/run-agent.ts"
 RESEARCHER_FILE="src/agents/researcher.ts"
 CRITIC_FILE="src/agents/critic.ts"
 SUPERVISOR_FILE="src/supervisor/create-supervisor.ts"
@@ -33,20 +32,25 @@ if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "createAgent({" "$SUPERVISOR_FILE"; 
   exit 1
 fi
 
+echo "[invariants] Checking: supervisor enables HITL middleware and checkpointing"
+if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "humanInTheLoopMiddleware" "$SUPERVISOR_FILE"; then
+  echo "Invariant violation: create-supervisor.ts must configure humanInTheLoopMiddleware."
+  exit 1
+fi
+if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "MemorySaver" "$SUPERVISOR_FILE"; then
+  echo "Invariant violation: create-supervisor.ts must configure MemorySaver for resume flow."
+  exit 1
+fi
+
 echo "[invariants] Checking: supervisor tools wrap subagents inside src/supervisor"
 if [[ -f "$SUPERVISOR_TOOLS_FILE" ]] && ! grep -q "planResearch" "$SUPERVISOR_TOOLS_FILE"; then
   echo "Invariant violation: supervisor-tools.ts must wrap the Planner subagent."
   exit 1
 fi
 
-echo "[invariants] Checking: run-agent delegates to supervisor runtime"
-if ! grep -q "superviseResearch" "$RUN_AGENT_FILE"; then
-  echo "Invariant violation: run-agent.ts must delegate to superviseResearch."
-  exit 1
-fi
-
 echo "[invariants] Checking: legacy manual loop files are removed"
 for file in \
+  "src/agent/run-agent.ts" \
   "src/agent/llm-client.ts" \
   "src/agent/llm-adapter.ts" \
   "src/agent/tool-dispatcher.ts" \
