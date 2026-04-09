@@ -62,6 +62,10 @@ export interface RunSupervisorOptions {
   onProgress?: ProgressLogger;
 }
 
+interface InvokeSupervisorOptions {
+  suppressSuccessLog?: boolean;
+}
+
 export type SupervisorResumeDecision =
   | { type: "approve" }
   | { type: "edit"; feedback: string }
@@ -69,6 +73,8 @@ export type SupervisorResumeDecision =
 
 interface PendingReviewState {
   originalUserRequest: string;
+  filename: string;
+  content: string;
 }
 
 let supervisorAgent: ReturnType<typeof createAgent> | null = null;
@@ -147,7 +153,11 @@ export async function resumeSupervisorWithOptions(
   });
 
   if (resume.type === "edit") {
-    return restartSupervisorWorkflowWithFeedback(resume.feedback, options);
+    const result = await requestReportRevision(resume.feedback, options);
+    if (result.status === "completed") {
+      pendingReviewStates.delete(options.threadId.trim());
+    }
+    return result;
   }
 
   const result = await invokeSupervisor(
@@ -189,6 +199,7 @@ async function continueSupervisorWorkflow(
 async function invokeSupervisor(
   input: { messages: HumanMessage[] } | Command,
   options: RunSupervisorOptions,
+  invokeOptions: InvokeSupervisorOptions = {},
 ): Promise<RunSupervisorOutput> {
   const threadId = options.threadId.trim();
   if (!threadId) {
@@ -244,26 +255,16 @@ async function invokeSupervisor(
           throw new Error("Supervisor cannot continue revision cycle without an existing research plan.");
         }
 
-        return invokeSupervisor(
-          new Command({
-            resume: {
-              decisions: [
-                {
-                  type: "edit",
-                  editedAction: {
-                    name: "run_research",
-                    args: {
-                      userRequest: originalUserRequest,
-                      plan: baseOutput.plan,
-                      critiqueFeedback: baseOutput.critique?.revisionRequests ?? [],
-                    },
-                  },
-                },
-              ],
-            },
-          }),
+        const continuedResult = await rejectPrematureWriteReport(
+          {
+            ...baseOutput,
+            status: "completed",
+            pendingReview: null,
+          },
           options,
         );
+
+        return continueSupervisorWorkflow(continuedResult, options);
       }
 
       options.onProgress?.({
@@ -275,6 +276,8 @@ async function invokeSupervisor(
 
       pendingReviewStates.set(threadId, {
         originalUserRequest,
+        filename: pendingReview.filename,
+        content: pendingReview.content,
       });
 
       return {
@@ -284,12 +287,14 @@ async function invokeSupervisor(
       };
     }
 
-    options.onProgress?.({
-      scope: "supervisor",
-      phase: "success",
-      message: "Supervisor finished",
-      detail: `${assistantMessages.length || 1} iteration(s)`,
-    });
+    if (!invokeOptions.suppressSuccessLog) {
+      options.onProgress?.({
+        scope: "supervisor",
+        phase: "success",
+        message: "Supervisor finished",
+        detail: `${assistantMessages.length || 1} iteration(s)`,
+      });
+    }
 
     return {
       ...baseOutput,
@@ -363,7 +368,29 @@ async function requestRevisionContinuation(
   );
 }
 
-async function restartSupervisorWorkflowWithFeedback(
+async function rejectPrematureWriteReport(
+  completedResult: CompletedSupervisorOutput,
+  options: RunSupervisorOptions,
+): Promise<RunSupervisorOutput> {
+  await invokeSupervisor(
+    new Command({
+      resume: {
+        decisions: [
+          {
+            type: "reject",
+            message: "Critic still requires another revision round. Do not save this draft. Continue with the mandatory research and critique cycle.",
+          },
+        ],
+      },
+    }),
+    options,
+    { suppressSuccessLog: true },
+  );
+
+  return requestRevisionContinuation(completedResult, options);
+}
+
+async function requestReportRevision(
   feedback: string,
   options: RunSupervisorOptions,
 ): Promise<RunSupervisorOutput> {
@@ -381,8 +408,8 @@ async function restartSupervisorWorkflowWithFeedback(
   options.onProgress?.({
     scope: "supervisor",
     phase: "info",
-    message: "Supervisor restarted the full workflow",
-    detail: "Human review requested changes to the report draft.",
+    message: "Supervisor restarted the full revision cycle",
+    detail: "Human review requested changes before save, so the full workflow will run again.",
   });
 
   await invokeSupervisor(
@@ -391,20 +418,19 @@ async function restartSupervisorWorkflowWithFeedback(
         decisions: [
           {
             type: "reject",
-            message: "Human review requested report changes. Do not save the current draft.",
+            message: "Human selected edit for this draft. Do not save the current version. Wait for the next human instruction, then revise the report and call write_report again.",
           },
         ],
       },
     }),
     options,
+    { suppressSuccessLog: true },
   );
 
-  const rerunPrompt = buildFullWorkflowRevisionPrompt(
-    pendingState.originalUserRequest,
+  const rerunPrompt = buildReportRevisionPrompt(
+    pendingState,
     normalizedFeedback,
   );
-
-  pendingReviewStates.delete(threadId);
 
   const result = await invokeSupervisor(
     { messages: [new HumanMessage(rerunPrompt)] },
@@ -433,18 +459,21 @@ function toHITLResponse(
   };
 }
 
-function buildFullWorkflowRevisionPrompt(
-  originalUserRequest: string,
+function buildReportRevisionPrompt(
+  pendingState: PendingReviewState,
   feedback: string,
 ): string {
   return [
-    "Restart the full mandatory supervisor workflow from the beginning.",
-    "Do not reuse the previous report draft as final output.",
-    "Run the entire sequence again: plan_research -> run_research -> critique_findings.",
+    "Restart the mandatory supervisor workflow on the current thread.",
+    "Do not save the previous draft.",
+    "Run the full sequence again: plan_research -> run_research -> critique_findings.",
     "Use the human review feedback below as an additional requirement for the next run.",
-    "After the workflow is complete, call write_report again with a revised markdown report.",
+    "You may reuse valid context from the previous attempt, but you must complete the full workflow again before calling write_report.",
+    "After the workflow is complete, call write_report exactly once and wait for review.",
     "",
-    `Original user request:\n${originalUserRequest}`,
+    `Original user request:\n${pendingState.originalUserRequest}`,
+    `Current draft filename:\n${pendingState.filename}`,
+    `Current draft markdown:\n${pendingState.content}`,
     `Human review feedback:\n${feedback}`,
   ].join("\n\n");
 }

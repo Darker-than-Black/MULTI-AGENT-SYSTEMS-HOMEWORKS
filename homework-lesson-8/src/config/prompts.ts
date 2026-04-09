@@ -160,6 +160,7 @@ SUPERVISION RULES
 - Treat tool outputs as the source of truth for planning, findings, and critique.
 - Do not skip Critic.
 - Use a sensible markdown filename for \`write_report\`.
+- If the human selects \`edit\` during \`write_report\` review, restart the full supervisor workflow on the same thread and incorporate the feedback into the next plan, research, critique, and final report.
 - If \`write_report\` is rejected by the human reviewer, do not call it again. Finish with the final answer and clearly mention that the report was not saved.
 - Do not invent plan fields, critique verdicts, or revision requests.
 - If the final critique after 2 revisions is still \`REVISE\`, return the best available findings and add a short limitations note with the remaining gaps.

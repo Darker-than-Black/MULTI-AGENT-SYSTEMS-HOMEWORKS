@@ -153,43 +153,23 @@ async function buildResumeDecision(
     };
   }
 
-  const feedback = await askMultilineInput(
-    cli,
-    [
-      `Provide revision feedback for "${review.filename}".`,
-      "The Supervisor will restart the full pipeline and regenerate the report.",
-      "Finish with a single line containing EOF.",
-    ].join("\n"),
-  );
-  if (feedback === null) {
-    throw new Error("Review flow was interrupted before revision feedback was provided.");
-  }
-
-  return {
-    type: "edit",
-    feedback: feedback.trim(),
-  };
-}
-
-async function askMultilineInput(
-  cli: ReturnType<typeof createInterface>,
-  prompt: string,
-): Promise<string | null> {
-  console.log(prompt);
-  const lines: string[] = [];
-
+  console.log(`Provide revision feedback for "${review.filename}".`);
+  console.log("The Supervisor will restart the full cycle on the same thread and ask for approval again.");
   while (true) {
-    const line = await askQuestion(cli, "");
-    if (line === null) {
-      return null;
+    const feedback = await askQuestion(cli, "Your feedback: ");
+    if (feedback === null) {
+      throw new Error("Review flow was interrupted before revision feedback was provided.");
     }
 
-    if (line.trim() === "EOF") {
-      break;
+    const normalizedFeedback = feedback.trim();
+    if (!normalizedFeedback) {
+      console.log("Feedback cannot be empty.\n");
+      continue;
     }
 
-    lines.push(line);
+    return {
+      type: "edit",
+      feedback: normalizedFeedback,
+    };
   }
-
-  return lines.join("\n");
 }

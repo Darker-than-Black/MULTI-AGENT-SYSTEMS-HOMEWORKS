@@ -92,7 +92,7 @@ export function logPendingReview(preview: PendingReviewPreview): void {
 export function logResumeDecision(decision: "approve" | "edit" | "reject"): void {
   const messageByDecision = {
     approve: "✅ Approved report write. Resuming agent...",
-    edit: "✍️ Submitted revision feedback. Supervisor is restarting the workflow...",
+    edit: "✍️ Submitted revision feedback. Supervisor is restarting the full revision cycle...",
     reject: "⛔ Rejected report write. Resuming agent...",
   } as const;
 
