@@ -68,10 +68,22 @@ export async function research(input: ResearchInput): Promise<string> {
 
   const researcher = createResearcherAgent();
   const recursionLimit = getResearchWorkflowRecursionLimit(input.plan.searchQueries.length);
-  const result = await researcher.invoke(
+  let result = await researcher.invoke(
     { messages: [new HumanMessage(buildResearchPrompt(input))] },
     { recursionLimit },
   );
+
+  const initialToolMessages = result.messages.filter(
+    (message: typeof result.messages[number]) => message.getType() === "tool",
+  );
+
+  const webFollowUp = buildMissingWebEvidenceFollowUp(input.plan, initialToolMessages);
+  if (webFollowUp) {
+    result = await researcher.invoke(
+      { messages: [...result.messages, new HumanMessage(webFollowUp)] },
+      { recursionLimit },
+    );
+  }
 
   const lastMessage = result.messages.at(-1);
   const finalAnswer = lastMessage ? stringifyMessageContent(lastMessage.content).trim() : "";
@@ -139,6 +151,89 @@ function buildResearchPrompt(input: ResearchInput): string {
   );
 
   return sections.join("\n\n");
+}
+
+function buildMissingWebEvidenceFollowUp(
+  plan: ResearchPlan,
+  toolMessages: Array<{ name?: string; content: unknown }>,
+): string | null {
+  if (!plan.sourcesToCheck.includes("web")) {
+    return null;
+  }
+
+  if (hasSuccessfulToolResult(toolMessages, "read_url")) {
+    return null;
+  }
+
+  if (hasSuccessfulToolResult(toolMessages, "web_search")) {
+    return [
+      "Web evidence is required by the current research plan, but you finished without inspecting any web page content.",
+      "Before finishing, call `read_url` on the most relevant URL(s) returned by `web_search` and update the findings with specific evidence.",
+      "Only if all candidate pages fail to load may you finish with an explicit limitations note.",
+    ].join("\n");
+  }
+
+  return [
+    "Web evidence is required by the current research plan, but you did not obtain usable web results.",
+    "Retry with broader or simpler `web_search` queries derived from the plan, then call `read_url` on the most relevant result before finishing.",
+    "Only if repeated web search attempts still produce no usable result may you finish with an explicit limitations note.",
+  ].join("\n");
+}
+
+function hasSuccessfulToolResult(
+  toolMessages: Array<{ name?: string; content: unknown }>,
+  toolName: string,
+): boolean {
+  for (const toolMessage of toolMessages) {
+    if (toolMessage.name !== toolName) {
+      continue;
+    }
+
+    const normalized = stringifyMessageContent(toolMessage.content).trim().toLowerCase();
+    if (!normalized) {
+      continue;
+    }
+
+    if (isLikelyToolFailure(toolName, normalized)) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function isLikelyToolFailure(toolName: string, normalizedContent: string): boolean {
+  if (normalizedContent.startsWith("error:")) {
+    return true;
+  }
+
+  if (normalizedContent.startsWith(`${toolName}:`)) {
+    return true;
+  }
+
+  if (normalizedContent.includes("no results found")) {
+    return true;
+  }
+
+  if (normalizedContent.includes("request failed")) {
+    return true;
+  }
+
+  if (normalizedContent.includes("timed out")) {
+    return true;
+  }
+
+  if (normalizedContent.includes("unable to extract readable text")) {
+    return true;
+  }
+
+  if (normalizedContent.includes("target responded with")) {
+    return true;
+  }
+
+  return false;
 }
 
 function didWriteReport(toolMessages: Array<{ name?: string; content: unknown }>): boolean {

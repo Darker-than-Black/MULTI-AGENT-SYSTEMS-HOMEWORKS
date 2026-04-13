@@ -55,7 +55,11 @@ const fakeSupervisorTools = [
     },
   ),
   tool(
-    async () => {
+    async ({ plan }) => {
+      if (!plan || plan.goal !== "Explain RAG clearly") {
+        throw new Error("Critique tool should receive the research plan.");
+      }
+
       critiqueCalls += 1;
       return JSON.stringify(
         critiqueCalls === 1
@@ -85,6 +89,7 @@ const fakeSupervisorTools = [
       schema: z.object({
         userRequest: z.string(),
         findings: z.string(),
+        plan: z.any(),
       }),
     },
   ),
@@ -105,9 +110,9 @@ const fakeModel = new FakeToolCallingModel({
   toolCalls: [
     [{ name: "plan_research", args: { userRequest }, id: "tool-1" }],
     [{ name: "run_research", args: { userRequest, plan }, id: "tool-2" }],
-    [{ name: "critique_findings", args: { userRequest, findings: "Initial findings that are incomplete and need revision." }, id: "tool-3" }],
+    [{ name: "critique_findings", args: { userRequest, findings: "Initial findings that are incomplete and need revision.", plan }, id: "tool-3" }],
     [{ name: "run_research", args: { userRequest, plan, critiqueFeedback: ["Add stronger evidence and tighten the explanation."] }, id: "tool-4" }],
-    [{ name: "critique_findings", args: { userRequest, findings: "Improved findings with stronger evidence and clearer structure." }, id: "tool-5" }],
+    [{ name: "critique_findings", args: { userRequest, findings: "Improved findings with stronger evidence and clearer structure.", plan }, id: "tool-5" }],
     [{ name: "write_report", args: { filename: "rag_report.md", content: "# RAG report\n\nImproved findings with stronger evidence." }, id: "tool-6" }],
     [],
   ],

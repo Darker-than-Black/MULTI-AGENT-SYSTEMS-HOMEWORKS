@@ -75,6 +75,12 @@ if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
 const result = await critique({
   userRequest: "Compare naive RAG and sentence-window retrieval using current web evidence and explain when each approach should be used.",
   findings: "RAG helps models answer questions better. Sentence-window retrieval is another retrieval approach.",
+  plan: {
+    goal: "Compare naive RAG and sentence-window retrieval.",
+    searchQueries: ["naive RAG", "sentence-window retrieval"],
+    sourcesToCheck: ["knowledge_base", "web"],
+    outputFormat: "Concise comparison with evidence.",
+  },
 });
 
 CritiqueResultSchema.parse(result);

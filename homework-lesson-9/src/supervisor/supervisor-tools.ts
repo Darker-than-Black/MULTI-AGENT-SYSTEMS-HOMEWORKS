@@ -99,10 +99,11 @@ export const runResearchTool = tool(
 );
 
 export const critiqueFindingsTool = tool(
-  async ({ userRequest, findings }) => {
+  async ({ userRequest, findings, plan }) => {
+    const normalizedPlan = ResearchPlanSchema.parse(plan);
     emitSupervisorProgress("critic", "start", "Critic started");
     try {
-      const result = await critique({ userRequest, findings });
+      const result = await critique({ userRequest, findings, plan: normalizedPlan });
       emitSupervisorProgress(
         "critic",
         "success",
@@ -126,10 +127,11 @@ export const critiqueFindingsTool = tool(
   },
   {
     name: "critique_findings",
-    description: "Review research findings for freshness, completeness, and structure. Returns a structured critique verdict.",
+    description: "Review research findings against the original request and research plan. Returns a structured critique verdict.",
     schema: z.object({
       userRequest: z.string().trim().min(1).describe("Original user request."),
       findings: z.string().trim().min(1).describe("Findings produced by run_research."),
+      plan: ResearchPlanSchema.describe("Structured research plan used for the findings under review."),
     }),
   },
 );

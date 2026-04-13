@@ -5,11 +5,13 @@ import { getCriticRecursionLimit } from "../config/agent-policy";
 import { CritiqueResultSchema, type CritiqueResult } from "../schemas/critique-result";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { CRITIC_SYSTEM_PROMPT } from "../config/prompts";
+import type { ResearchPlan } from "../schemas/research-plan";
 import { knowledgeSearchTool, readUrlTool, webSearchTool } from "../tools/langchain-tools";
 
 export interface CritiqueInput {
   userRequest: string;
   findings: string;
+  plan: ResearchPlan;
 }
 
 let criticAgent: ReturnType<typeof createAgent> | null = null;
@@ -50,9 +52,10 @@ export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
     throw new Error("Critic findings cannot be empty.");
   }
 
+  const normalizedPlan = input.plan;
   const critic = createCriticAgent();
   const result = await critic.invoke(
-    { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings))] },
+    { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings, normalizedPlan))] },
     { recursionLimit: getCriticRecursionLimit() },
   );
 
@@ -63,10 +66,14 @@ export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
   return CritiqueResultSchema.parse(result.structuredResponse);
 }
 
-function buildCritiquePrompt(userRequest: string, findings: string): string {
+function buildCritiquePrompt(userRequest: string, findings: string, plan: ResearchPlan): string {
   return [
     `Original user request:\n${userRequest}`,
+    `Research plan goal:\n${plan.goal}`,
+    `Research plan search queries:\n${plan.searchQueries.map((query, index) => `${index + 1}. ${query}`).join("\n")}`,
+    `Research plan sources:\n${plan.sourcesToCheck.join(", ")}`,
+    `Research plan desired output:\n${plan.outputFormat}`,
     `Research findings to review:\n${findings}`,
-    "Task:\nReview whether the findings are sufficient for the original request. Verify the most important gaps with tools when needed, then return a structured critique result.",
+    "Task:\nReview whether the findings are sufficient for the original user request and the agreed research plan. Verify the most important gaps with tools when needed, then return a structured critique result.",
   ].join("\n\n");
 }
