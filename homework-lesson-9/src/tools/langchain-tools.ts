@@ -1,12 +1,10 @@
 import { tool } from "langchain";
 import { z } from "zod";
+import { callSearchMcpTool } from "../mcp/search-client";
 import type { ProgressLogger } from "../utils/logger";
-import { readUrl } from "./read-url";
-import { webSearch } from "./web-search";
 import { writeReport } from "./write-report";
 import { githubListDirectory } from "./github-list-directory";
 import { githubGetFileContent } from "./github-get-file-content";
-import { knowledgeSearch } from "./knowledge-search";
 
 let progressLogger: ProgressLogger | undefined;
 
@@ -74,7 +72,7 @@ export const webSearchTool = tool(
     withToolProgress(
       "web_search",
       `query=${JSON.stringify(query)}`,
-      () => webSearch({ query }),
+      () => callSearchMcpTool("web_search", { query }),
     ),
   {
     name: "web_search",
@@ -90,7 +88,7 @@ export const readUrlTool = tool(
     withToolProgress(
       "read_url",
       `url=${url}`,
-      () => readUrl({ url }),
+      () => callSearchMcpTool("read_url", { url }),
     ),
   {
     name: "read_url",
@@ -166,7 +164,7 @@ export const knowledgeSearchTool = tool(
     withToolProgress(
       "knowledge_search",
       `query=${JSON.stringify(query)}`,
-      () => knowledgeSearch({ query }),
+      () => callSearchMcpTool("knowledge_search", { query }),
     ),
   {
     name: "knowledge_search",

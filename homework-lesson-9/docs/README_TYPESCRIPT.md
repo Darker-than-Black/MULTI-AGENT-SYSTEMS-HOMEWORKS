@@ -96,6 +96,8 @@ Supervisor Agent (local)
 - один SearchMCP використовується усіма трьома ACP агентами
 - MCP layer не містить orchestration logic
 - `knowledge_search` продовжує делегувати в `src/rag/*`
+- на етапі `Block 2` локальні агенти вже повинні викликати `SearchMCP`, але через thin proxy/client layer, сумісний з поточним `createAgent(...)` flow
+- на етапі `Block 4` цей тимчасовий proxy layer має бути замінений на пряму MCP-взаємодію з боку agent runtime
 
 ### ReportMCP
 
@@ -282,6 +284,11 @@ homework-lesson-9/
 - Supervisor orchestration окремо
 - tool business logic окремо
 
+Для `SearchMCP` приймається такий поетапний підхід:
+
+- `Block 2`: агенти викликають MCP через `src/mcp/search-client.ts` або еквівалентний thin proxy
+- `Block 4`: ACP agents переходять на пряму взаємодію з MCP runtime без проміжної legacy-style tool wiring
+
 ---
 
 ## Важлива адаптація з Python на TypeScript
@@ -298,6 +305,11 @@ homework-lesson-9/
 - `main.py` -> `src/main.ts`
 
 Суть завдання: не повторити Python-файли буквально, а зберегти той самий архітектурний контракт у TypeScript.
+
+Практичне правило для цього проєкту:
+
+- якщо потрібний server/client transport, спочатку перевіряємо можливості вже встановлених бібліотек
+- self-written wrappers допускаються лише як thin composition layer, а не як повторна реалізація MCP protocol logic
 
 ---
 

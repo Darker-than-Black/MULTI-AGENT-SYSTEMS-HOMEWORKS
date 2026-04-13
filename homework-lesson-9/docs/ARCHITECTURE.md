@@ -73,6 +73,7 @@ File names may vary slightly, but the boundaries below are mandatory.
   - Owns MCP transport layer.
   - Exposes SearchMCP and ReportMCP servers.
   - Owns MCP client creation for ACP agents and Supervisor.
+  - During `Block 2`, may also own a temporary compatibility layer so current local agents can route tool calls through SearchMCP before ACP migration is complete.
   - Must not contain Supervisor workflow logic.
 
 - `src/agents/*`
@@ -124,6 +125,11 @@ Supervisor -> MCP Client -> ReportMCP
 SearchMCP is shared by Planner, Researcher, and Critic.
 ReportMCP is used by Supervisor for persistence only.
 
+Transitional rule:
+
+- In `Block 2`, existing local agents are allowed to access SearchMCP through a thin MCP client/proxy layer.
+- In `Block 4`, ACP agents must switch to direct MCP interaction as the steady-state architecture.
+
 ## 4) Core Flows
 
 ### Supervisor Runtime Flow
@@ -147,7 +153,8 @@ ReportMCP is used by Supervisor for persistence only.
 1. MCP server boots once.
 2. It registers `web_search`, `read_url`, and `knowledge_search`.
 3. It exposes `resource://knowledge-base-stats`.
-4. ACP agents reuse the same MCP endpoint concurrently.
+4. During `Block 2`, local agents may reuse the same MCP endpoint through a compatibility proxy.
+5. In the final architecture, ACP agents reuse the same MCP endpoint concurrently without local legacy wrappers.
 
 ### ReportMCP Flow
 
@@ -200,6 +207,11 @@ Planner, Researcher, and Critic must preserve these semantics across ACP boundar
 
 - SearchMCP resources:
   - `resource://knowledge-base-stats`
+  - payload fields:
+    - `collection`
+    - `corpusPath`
+    - `documentCount`
+    - `updatedAt`
 
 - ReportMCP tools:
   - `save_report`
@@ -239,7 +251,24 @@ Canonical first-version contracts:
   - `findings: FindingsEnvelope`
   - `plan: ResearchPlan`
 
-## 7) Configuration Contract
+## 7) Library Reuse Rule
+
+Use already installed libraries before introducing custom transport code.
+
+Current findings from the local environment:
+
+- `@langchain/openai@1.4.3` already includes MCP-related support via `tools.mcp(...)` for OpenAI remote MCP integration.
+- Current project dependencies do not yet include `@modelcontextprotocol/sdk`.
+- Current codebase does not expose a ready-made generic LangChain adapter that replaces the need for our own thin MCP client wiring in the current `createAgent(...)` flow.
+
+Therefore:
+
+- SearchMCP server should be built on `@modelcontextprotocol/sdk`.
+- Existing `src/tools/*` business logic should be reused as-is.
+- Any project-local MCP client layer should remain thin and focused on adapting protocol calls to the current agent/tool runtime.
+- We should not re-implement MCP protocol behavior manually if the SDK already provides the server/client primitives.
+
+## 8) Configuration Contract
 
 The following categories of config must exist in `src/config/env.ts`:
 
@@ -257,7 +286,7 @@ The following categories of config must exist in `src/config/env.ts`:
 
 Role prompts for Supervisor, Planner, Researcher, and Critic must remain centralized.
 
-## 8) Invariants
+## 9) Invariants
 
 - Supervisor orchestration is isolated from retrieval implementation.
 - Tool business logic is isolated from MCP transport bootstrap.
@@ -268,12 +297,15 @@ Role prompts for Supervisor, Planner, Researcher, and Critic must remain central
 - `knowledge_search` remains an adapter over the RAG layer.
 - `src/rag/*` remains decoupled from Supervisor and transport modules.
 - SearchMCP serves all three ACP agents.
+- SearchMCP stats compute `documentCount` from unique `source` values in `.rag/knowledge-corpus.json`.
+- If the knowledge corpus is missing, `resource://knowledge-base-stats` must fail rather than return a fake empty success state.
 - ReportMCP is used only for report persistence concerns.
 - `save_report` remains gated by HITL before persistence.
 - HITL lives only in local Supervisor orchestration, never inside ReportMCP.
 - Resume flow preserves `thread_id`.
+- Transitional `Block 2` MCP proxies are allowed, but they must be removed or bypassed in favor of direct MCP interaction by `Block 4`.
 
-## 9) Validation Expectations
+## 10) Validation Expectations
 
 The public validation entrypoint remains:
 
@@ -286,12 +318,13 @@ Validation coverage must include:
 - SearchMCP tool registration
 - ReportMCP tool registration
 - MCP resource exposure
+- Block 2 local-agent integration through SearchMCP proxy/client wiring
 - ACP agent registration
 - Planner structured output across ACP
 - Critic structured output across ACP
 - Supervisor orchestration through ACP delegation
 - HITL save flow through ReportMCP
 
-## 10) Maintenance Rule
+## 11) Maintenance Rule
 
 If transport boundaries, runtime topology, handoff contracts, or validation scope change, update this document in the same commit.

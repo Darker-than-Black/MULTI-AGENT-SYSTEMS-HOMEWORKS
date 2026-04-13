@@ -54,11 +54,16 @@ Goal: expose evidence tools through MCP instead of local registration.
 - [ ] `read_url` is exposed through SearchMCP
 - [ ] `knowledge_search` is exposed through SearchMCP
 - [ ] `resource://knowledge-base-stats` is exposed
+- [ ] `resource://knowledge-base-stats` computes `documentCount` from unique `source` values in `.rag/knowledge-corpus.json`
+- [ ] `resource://knowledge-base-stats` fails if the corpus is missing
 - [ ] SearchMCP reuses the existing RAG-backed `knowledge_search` logic
+- [ ] Existing local agents call SearchMCP through a thin MCP client/proxy layer
+- [ ] SearchMCP is built with `@modelcontextprotocol/sdk`, not a handwritten protocol server
 
 Definition of done:
 
 - [ ] A client can discover and invoke all SearchMCP tools and resources
+- [ ] Current local agents can reach SearchMCP through the transitional proxy/client wiring
 
 ## Block 3. MCP Report Server
 
@@ -84,6 +89,7 @@ Goal: publish Planner, Researcher, and Critic as remote agents.
 - [ ] Critic endpoint is registered
 - [ ] Each ACP agent connects to SearchMCP through an MCP client
 - [ ] MCP tools are adapted for LangChain agent usage
+- [ ] Transitional Block 2 proxy-based MCP wiring is replaced with direct MCP interaction in the ACP agent runtime
 
 Definition of done:
 
@@ -182,6 +188,7 @@ Goal: ensure the protocol-based architecture is testable end to end.
 - [ ] Validation covers ingestion
 - [ ] Validation covers retrieval
 - [ ] Validation covers SearchMCP tool/resource discovery
+- [ ] Validation covers Block 2 local-agent integration through SearchMCP
 - [ ] Validation covers ReportMCP tool/resource discovery
 - [ ] Validation covers ACP agent registration
 - [ ] Validation covers Planner structured output via ACP

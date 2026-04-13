@@ -12,7 +12,25 @@ npm run check
 echo "[validate] Running architecture invariants..."
 npm run invariant:check
 
-echo "[validate] Running baseline planner validation..."
+SEARCH_MCP_LOG="$(mktemp)"
+echo "[validate] Starting SearchMCP server..."
+npm run mcp:search >"$SEARCH_MCP_LOG" 2>&1 &
+SEARCH_MCP_PID=$!
+
+cleanup() {
+  if [[ -n "${SEARCH_MCP_PID:-}" ]] && kill -0 "$SEARCH_MCP_PID" 2>/dev/null; then
+    kill "$SEARCH_MCP_PID" 2>/dev/null || true
+    wait "$SEARCH_MCP_PID" 2>/dev/null || true
+  fi
+}
+
+trap cleanup EXIT
+sleep 2
+
+echo "[validate] Running SearchMCP discovery + invocation validation..."
+bash scripts/smoke-search-mcp.sh
+
+echo "[validate] Running planner validation through SearchMCP..."
 node --input-type=module --import tsx -e '
 import { planResearch } from "./src/agents/planner.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
@@ -35,7 +53,7 @@ if (plan.searchQueries.length < 1) {
 console.log(JSON.stringify(plan, null, 2));
 '
 
-echo "[validate] Running baseline researcher validation..."
+echo "[validate] Running researcher validation through SearchMCP..."
 node --input-type=module --import tsx -e '
 import { research } from "./src/agents/researcher.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
@@ -59,7 +77,7 @@ if (!findings.trim()) {
 console.log(findings);
 '
 
-echo "[validate] Running baseline critic validation..."
+echo "[validate] Running critic validation through SearchMCP..."
 node --input-type=module --import tsx -e '
 import { critique } from "./src/agents/critic.ts";
 import { CritiqueResultSchema } from "./src/schemas/critique-result.ts";
@@ -174,4 +192,4 @@ bash scripts/smoke-multi-agent-flow.sh
 echo "[validate] Running RAG smoke suite..."
 npm run rag:check
 
-echo "[validate] Baseline validations passed. Protocol-specific MCP/ACP checks will be added during implementation."
+echo "[validate] Block 2 validations passed. ACP- and ReportMCP-specific checks will be added in later blocks."
