@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.qdrant
-    container_name: homework-lesson-5-qdrant
+    container_name: homework-lesson-9-qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.app
-    container_name: homework-lesson-5-app
+    container_name: homework-lesson-9-app
     depends_on:
       - qdrant
     env_file:

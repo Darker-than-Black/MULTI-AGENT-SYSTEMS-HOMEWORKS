@@ -105,7 +105,7 @@ const hitlMiddleware = humanInTheLoopMiddleware({
 
 function buildDefaultSupervisorModel(): LanguageModelLike {
   if (!OPENAI_API_KEY.trim()) {
-    throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
+    throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-9/.env.");
   }
 
   return new ChatOpenAI({

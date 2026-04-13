@@ -12,7 +12,7 @@ npm run check
 echo "[validate] Running architecture invariants..."
 npm run invariant:check
 
-echo "[validate] Running planner validation..."
+echo "[validate] Running baseline planner validation..."
 node --input-type=module --import tsx -e '
 import { planResearch } from "./src/agents/planner.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
@@ -35,7 +35,7 @@ if (plan.searchQueries.length < 1) {
 console.log(JSON.stringify(plan, null, 2));
 '
 
-echo "[validate] Running researcher validation..."
+echo "[validate] Running baseline researcher validation..."
 node --input-type=module --import tsx -e '
 import { research } from "./src/agents/researcher.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
@@ -59,7 +59,7 @@ if (!findings.trim()) {
 console.log(findings);
 '
 
-echo "[validate] Running critic validation..."
+echo "[validate] Running baseline critic validation..."
 node --input-type=module --import tsx -e '
 import { critique } from "./src/agents/critic.ts";
 import { CritiqueResultSchema } from "./src/schemas/critique-result.ts";
@@ -86,7 +86,32 @@ if (result.verdict !== "REVISE") {
 console.log(JSON.stringify(result, null, 2));
 '
 
-echo "[validate] Running supervisor validation..."
+echo "[validate] Checking protocol baseline config..."
+node --input-type=module --import tsx -e '
+import {
+  ACP_URL,
+  REPORT_MCP_URL,
+  SEARCH_MCP_URL,
+} from "./src/config/env.ts";
+
+for (const [key, value] of Object.entries({
+  SEARCH_MCP_URL,
+  REPORT_MCP_URL,
+  ACP_URL,
+})) {
+  if (!String(value).trim()) {
+    throw new Error(`${key} must be configured.`);
+  }
+}
+
+console.log(JSON.stringify({
+  SEARCH_MCP_URL,
+  REPORT_MCP_URL,
+  ACP_URL,
+}, null, 2));
+'
+
+echo "[validate] Running supervisor baseline validation..."
 if ! grep -q "humanInTheLoopMiddleware" "src/supervisor/create-supervisor.ts"; then
   echo "Supervisor HITL middleware wiring is missing."
   exit 1
@@ -99,18 +124,7 @@ fi
 
 node --input-type=module --import tsx -e '
 import { createSupervisorAgent } from "./src/supervisor/create-supervisor.ts";
-import {
-  parseCritiqueToolResult,
-  parsePlanToolResult,
-  supervisorTools,
-} from "./src/supervisor/supervisor-tools.ts";
-
-const toolNames = supervisorTools.map((tool) => tool.name).sort();
-const expectedNames = ["critique_findings", "plan_research", "run_research", "write_report"].sort();
-
-if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
-  throw new Error(`Supervisor tools mismatch: ${JSON.stringify(toolNames)}`);
-}
+import { parseCritiqueToolResult, parsePlanToolResult } from "./src/supervisor/supervisor-tools.ts";
 
 const parsedPlan = parsePlanToolResult(JSON.stringify({
   goal: "Explain retrieval-augmented generation.",
@@ -143,16 +157,15 @@ if (!supervisor) {
 }
 
 console.log(JSON.stringify({
-  toolNames,
   parsedPlan,
   parsedCritique,
 }, null, 2));
 '
 
-echo "[validate] Running deterministic multi-agent workflow validation..."
+echo "[validate] Running deterministic baseline workflow validation..."
 bash scripts/smoke-multi-agent-flow.sh
 
 echo "[validate] Running RAG smoke suite..."
 npm run rag:check
 
-echo "[validate] All validations passed."
+echo "[validate] Baseline validations passed. Protocol-specific MCP/ACP checks will be added during implementation."

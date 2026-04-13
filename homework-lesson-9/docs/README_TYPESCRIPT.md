@@ -7,7 +7,7 @@
 
 ## Мета
 
-Перевести мультиагентну систему з `homework-lesson-8` на **protocol-based architecture**:
+Перевести поточний multi-agent baseline на **protocol-based architecture**:
 
 - `MCP` для інструментів
 - `ACP` для агентів

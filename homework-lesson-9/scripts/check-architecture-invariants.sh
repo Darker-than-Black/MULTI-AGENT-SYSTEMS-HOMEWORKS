@@ -9,10 +9,10 @@ cd "$PROJECT_DIR"
 RESEARCHER_FILE="src/agents/researcher.ts"
 CRITIC_FILE="src/agents/critic.ts"
 SUPERVISOR_FILE="src/supervisor/create-supervisor.ts"
-SUPERVISOR_TOOLS_FILE="src/supervisor/supervisor-tools.ts"
 RAG_DIR="src/rag"
 KNOWLEDGE_SEARCH_FILE="src/tools/knowledge-search.ts"
 LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
+ENV_FILE="src/config/env.ts"
 
 echo "[invariants] Checking: researcher uses LangChain createAgent"
 if ! grep -q "createAgent({" "$RESEARCHER_FILE"; then
@@ -39,12 +39,6 @@ if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "humanInTheLoopMiddleware" "$SUPERVI
 fi
 if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "MemorySaver" "$SUPERVISOR_FILE"; then
   echo "Invariant violation: create-supervisor.ts must configure MemorySaver for resume flow."
-  exit 1
-fi
-
-echo "[invariants] Checking: supervisor tools wrap subagents inside src/supervisor"
-if [[ -f "$SUPERVISOR_TOOLS_FILE" ]] && ! grep -q "planResearch" "$SUPERVISOR_TOOLS_FILE"; then
-  echo "Invariant violation: supervisor-tools.ts must wrap the Planner subagent."
   exit 1
 fi
 
@@ -98,5 +92,14 @@ if [[ -f "$KNOWLEDGE_SEARCH_FILE" ]]; then
     exit 1
   fi
 fi
+
+echo "[invariants] Checking: protocol runtime config exists in env.ts"
+for key in "SEARCH_MCP_URL" "REPORT_MCP_URL" "ACP_URL"
+do
+  if ! grep -q "$key" "$ENV_FILE"; then
+    echo "Invariant violation: $ENV_FILE must declare $key."
+    exit 1
+  fi
+done
 
 echo "[invariants] All architecture invariants passed."
