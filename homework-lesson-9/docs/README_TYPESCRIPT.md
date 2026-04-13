@@ -132,7 +132,54 @@ Planner і Critic зберігають structured output:
 - `ResearchPlan`
 - `CritiqueResult`
 
-Researcher повертає findings у стабільному текстовому форматі, придатному для подальшої критики.
+Researcher повертає `FindingsEnvelope`.
+
+`FindingsEnvelope` на першій версії може мати простий shape, але він є окремим handoff contract, а не довільним рядком. Мінімальні вимоги:
+
+- findings мають бути у `markdown`
+- findings мають містити evidence-oriented sections
+- findings мають бути придатні для Critic без додаткового контексту
+
+Мінімально acceptable payload:
+
+```ts
+type FindingsEnvelope = {
+  markdown: string;
+};
+```
+
+Надалі цей envelope можна розширити metadata без ламання Supervisor/Critic contract.
+
+---
+
+## Agent Handoff Contracts
+
+### Planner
+
+- input:
+  - `userRequest`
+- output:
+  - `ResearchPlan`
+
+Для першої версії Planner не повинен отримувати зайвий runtime state.
+
+### Researcher
+
+- input:
+  - `userRequest`
+  - `plan`
+  - `critiqueFeedback?`
+- output:
+  - `FindingsEnvelope`
+
+### Critic
+
+- input:
+  - `userRequest`
+  - `findings`
+  - `plan`
+- output:
+  - `CritiqueResult`
 
 ---
 
@@ -156,6 +203,12 @@ Supervisor:
 - не містить retrieval logic
 - не містить MCP tool business logic
 - не виконує роль Planner / Researcher / Critic локально
+
+Supervisor працює з такими handoff contracts:
+
+- Planner receives only `userRequest`
+- Researcher receives `userRequest + plan + critiqueFeedback?`
+- Critic receives `userRequest + findings + plan`
 
 ---
 
@@ -199,6 +252,7 @@ homework-lesson-9/
 │   │   └── critic.ts
 │   ├── schemas/
 │   │   ├── research-plan.ts
+│   │   ├── findings-envelope.ts
 │   │   └── critique-result.ts
 │   ├── tools/
 │   │   ├── web-search.ts
@@ -258,6 +312,8 @@ homework-lesson-9/
 7. якщо verdict = `APPROVE`, формується markdown report
 8. `save_report` проходить через HITL approval flow
 9. після `approve` звіт фізично зберігається в `output/`
+
+При цьому Researcher не повертає довільний текст, а повертає `FindingsEnvelope` з self-contained markdown findings.
 
 ---
 

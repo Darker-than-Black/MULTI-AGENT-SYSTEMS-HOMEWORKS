@@ -25,6 +25,7 @@ src/
 │   └── critic.ts
 ├── schemas/
 │   ├── research-plan.ts
+│   ├── findings-envelope.ts
 │   └── critique-result.ts
 ├── tools/
 │   ├── web-search.ts
@@ -81,7 +82,7 @@ File names may vary slightly, but the boundaries below are mandatory.
   - Must not contain CLI flow or ACP server bootstrap.
 
 - `src/schemas/*`
-  - Owns structured contracts such as `ResearchPlan` and `CritiqueResult`.
+  - Owns structured contracts such as `ResearchPlan`, `FindingsEnvelope`, and `CritiqueResult`.
   - Structured output is defined with `zod`.
   - Schema modules must stay free of orchestration and transport concerns.
 
@@ -132,8 +133,8 @@ ReportMCP is used by Supervisor for persistence only.
 3. Supervisor calls Planner through ACP.
 4. ACP Planner uses SearchMCP tools and returns structured `ResearchPlan`.
 5. Supervisor calls Researcher through ACP.
-6. ACP Researcher uses SearchMCP tools and returns findings.
-7. Supervisor calls Critic through ACP.
+6. ACP Researcher uses SearchMCP tools and returns `FindingsEnvelope`.
+7. Supervisor calls Critic through ACP with `userRequest + findings + plan`.
 8. ACP Critic uses SearchMCP tools and returns structured `CritiqueResult`.
 9. If verdict is `REVISE`, Supervisor calls Researcher again with critic feedback.
 10. If verdict is `APPROVE`, Supervisor prepares the final markdown report.
@@ -172,6 +173,11 @@ The following structured outputs must exist in `src/schemas/*`:
   - sources to check
   - desired output format
 
+- `FindingsEnvelope`
+  - markdown findings payload
+  - evidence-oriented sections
+  - self-contained content suitable for Critic without extra hidden context
+
 - `CritiqueResult`
   - verdict
   - freshness assessment
@@ -181,7 +187,7 @@ The following structured outputs must exist in `src/schemas/*`:
   - gaps
   - revision requests
 
-Planner and Critic must preserve these semantics across ACP boundaries.
+Planner, Researcher, and Critic must preserve these semantics across ACP boundaries.
 
 ## 6) Transport Contract
 
@@ -214,9 +220,24 @@ Expected handoffs:
 - Supervisor -> Planner: original user request
 - Planner -> Supervisor: `ResearchPlan`
 - Supervisor -> Researcher: user request + `ResearchPlan` + optional revision requests
-- Researcher -> Supervisor: findings
-- Supervisor -> Critic: original user request + findings
+- Researcher -> Supervisor: `FindingsEnvelope`
+- Supervisor -> Critic: original user request + `FindingsEnvelope` + `ResearchPlan`
 - Critic -> Supervisor: `CritiqueResult`
+
+Canonical first-version contracts:
+
+- `PlannerInput`
+  - `userRequest: string`
+
+- `ResearcherInput`
+  - `userRequest: string`
+  - `plan: ResearchPlan`
+  - `critiqueFeedback?: string[]`
+
+- `CriticInput`
+  - `userRequest: string`
+  - `findings: FindingsEnvelope`
+  - `plan: ResearchPlan`
 
 ## 7) Configuration Contract
 
@@ -243,11 +264,13 @@ Role prompts for Supervisor, Planner, Researcher, and Critic must remain central
 - Agent role logic is isolated from ACP transport bootstrap.
 - Planner, Researcher, and Critic are each instantiated via LangChain `createAgent`.
 - Planner and Critic structured outputs come from `zod` schemas in `src/schemas/*`.
+- Researcher output is a structured `FindingsEnvelope`, not an arbitrary string.
 - `knowledge_search` remains an adapter over the RAG layer.
 - `src/rag/*` remains decoupled from Supervisor and transport modules.
 - SearchMCP serves all three ACP agents.
 - ReportMCP is used only for report persistence concerns.
 - `save_report` remains gated by HITL before persistence.
+- HITL lives only in local Supervisor orchestration, never inside ReportMCP.
 - Resume flow preserves `thread_id`.
 
 ## 9) Validation Expectations

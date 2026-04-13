@@ -36,6 +36,10 @@ Goal: formalize the runtime split between Supervisor, MCP servers, and ACP serve
 - [ ] Supervisor responsibilities are documented separately from ACP agents
 - [ ] Runtime topology and communication graph are documented
 - [ ] Handoff contracts between Supervisor, ACP agents, and MCP servers are explicit
+- [ ] Planner input contract is fixed to `userRequest`
+- [ ] Researcher input contract is fixed to `userRequest + plan + critiqueFeedback?`
+- [ ] Critic input contract is fixed to `userRequest + findings + plan`
+- [ ] HITL ownership is fixed to local Supervisor only
 
 Definition of done:
 
@@ -90,10 +94,14 @@ Definition of done:
 Goal: preserve stable handoff shapes across ACP boundaries.
 
 - [ ] `ResearchPlan` remains defined in `src/schemas/*`
+- [ ] `FindingsEnvelope` is defined in `src/schemas/*`
 - [ ] `CritiqueResult` remains defined in `src/schemas/*`
 - [ ] Planner returns structured output through ACP
+- [ ] Researcher returns `FindingsEnvelope` through ACP
 - [ ] Critic returns structured output through ACP
 - [ ] Researcher findings format is explicit and stable
+- [ ] `FindingsEnvelope.markdown` is self-contained and critique-ready
+- [ ] `FindingsEnvelope.markdown` contains evidence-oriented sections
 - [ ] Serialization/deserialization rules are defined for ACP handoffs
 
 Definition of done:
@@ -108,8 +116,10 @@ Goal: preserve role behavior while swapping local tools for MCP-provided tools.
 - [ ] Planner uses MCP-backed `web_search` and `knowledge_search`
 - [ ] Researcher is created via LangChain `createAgent`
 - [ ] Researcher uses MCP-backed `web_search`, `read_url`, and `knowledge_search`
+- [ ] Researcher produces markdown findings inside `FindingsEnvelope`
 - [ ] Critic is created via LangChain `createAgent`
 - [ ] Critic uses MCP-backed evidence tools
+- [ ] Critic consumes `plan` together with `findings`
 - [ ] Prompts stay role-specific and centralized
 
 Definition of done:
@@ -124,6 +134,7 @@ Goal: replace local subagent-tool wrappers with ACP delegation wrappers.
 - [ ] Supervisor invokes Planner through ACP
 - [ ] Supervisor invokes Researcher through ACP
 - [ ] Supervisor invokes Critic through ACP
+- [ ] Supervisor passes `plan` into both Researcher and Critic
 - [ ] Supervisor does not instantiate role agents as local business logic
 - [ ] Supervisor keeps code-enforced revision-round limits
 - [ ] Supervisor prepares the final markdown report after approval from Critic
@@ -143,6 +154,7 @@ Goal: keep human approval local while persistence moves to ReportMCP.
 - [ ] `approve` resumes into ReportMCP persistence
 - [ ] `edit` returns to Supervisor flow on the same thread
 - [ ] `reject` aborts persistence cleanly
+- [ ] ReportMCP does not contain approval logic
 
 Definition of done:
 
@@ -190,6 +202,7 @@ During implementation review, verify these items explicitly:
 - [ ] ACP transport is not mixed with agent role logic
 - [ ] Planner, Researcher, and Critic remain separate role-specific agents
 - [ ] Structured outputs live in `src/schemas/*`
+- [ ] `FindingsEnvelope` is used as the Researcher -> Critic handoff
 - [ ] `knowledge_search` still delegates to the RAG layer
 - [ ] SearchMCP is shared across all ACP agents
 - [ ] ReportMCP is used only for persistence concerns
