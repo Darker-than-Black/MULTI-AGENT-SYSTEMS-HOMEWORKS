@@ -1,10 +1,9 @@
 import { tool } from "langchain";
 import { z } from "zod";
+import { callGitHubMcpTool } from "../mcp/github-client";
 import { callSearchMcpTool } from "../mcp/search-client";
 import type { ProgressLogger } from "../utils/logger";
 import { writeReport } from "./write-report";
-import { githubListDirectory } from "./github-list-directory";
-import { githubGetFileContent } from "./github-get-file-content";
 
 let progressLogger: ProgressLogger | undefined;
 
@@ -126,7 +125,7 @@ export const githubListDirectoryTool = tool(
     withToolProgress(
       "github_list_directory",
       `owner=${owner}, repo=${repo}, path=${path}${ref ? `, ref=${ref}` : ""}`,
-      () => githubListDirectory({ owner, repo, path, ref }),
+      () => callGitHubMcpTool("github_list_directory", { owner, repo, path, ref }),
     ),
   {
     name: "github_list_directory",
@@ -145,7 +144,7 @@ export const githubGetFileContentTool = tool(
     withToolProgress(
       "github_get_file_content",
       `owner=${owner}, repo=${repo}, path=${path}${ref ? `, ref=${ref}` : ""}`,
-      () => githubGetFileContent({ owner, repo, path, ref }),
+      () => callGitHubMcpTool("github_get_file_content", { owner, repo, path, ref }),
     ),
   {
     name: "github_get_file_content",

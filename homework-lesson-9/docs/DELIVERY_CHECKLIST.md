@@ -12,6 +12,13 @@ A change set is not complete until:
 - `docs/ARCHITECTURE.md` is updated when transport boundaries or contracts change
 - relevant manual review of validation output was done, not only command execution
 
+## Current Status
+
+- [x] `Block 2. MCP Search Server` is implemented and validated
+- [x] Local agents reach `SearchMCP` through a thin MCP client/proxy layer
+- [x] The factual TS runtime also includes `GitHubMCP` for repository evidence used by `Researcher`
+- [ ] `ReportMCP` and `ACP server` remain pending
+
 ## Block 0. Baseline Alignment
 
 Goal: remove `hw8` assumptions from docs and runtime expectations before protocol work starts.
@@ -49,21 +56,37 @@ Definition of done:
 
 Goal: expose evidence tools through MCP instead of local registration.
 
-- [ ] SearchMCP server bootstrap exists
-- [ ] `web_search` is exposed through SearchMCP
-- [ ] `read_url` is exposed through SearchMCP
-- [ ] `knowledge_search` is exposed through SearchMCP
-- [ ] `resource://knowledge-base-stats` is exposed
-- [ ] `resource://knowledge-base-stats` computes `documentCount` from unique `source` values in `.rag/knowledge-corpus.json`
-- [ ] `resource://knowledge-base-stats` fails if the corpus is missing
-- [ ] SearchMCP reuses the existing RAG-backed `knowledge_search` logic
-- [ ] Existing local agents call SearchMCP through a thin MCP client/proxy layer
-- [ ] SearchMCP is built with `@modelcontextprotocol/sdk`, not a handwritten protocol server
+- [x] SearchMCP server bootstrap exists
+- [x] `web_search` is exposed through SearchMCP
+- [x] `read_url` is exposed through SearchMCP
+- [x] `knowledge_search` is exposed through SearchMCP
+- [x] `resource://knowledge-base-stats` is exposed
+- [x] `resource://knowledge-base-stats` computes `documentCount` from unique `source` values in `.rag/knowledge-corpus.json`
+- [x] `resource://knowledge-base-stats` fails if the corpus is missing
+- [x] SearchMCP reuses the existing RAG-backed `knowledge_search` logic
+- [x] Existing local agents call SearchMCP through a thin MCP client/proxy layer
+- [x] SearchMCP is built with `@modelcontextprotocol/sdk`, not a handwritten protocol server
 
 Definition of done:
 
-- [ ] A client can discover and invoke all SearchMCP tools and resources
-- [ ] Current local agents can reach SearchMCP through the transitional proxy/client wiring
+- [x] A client can discover and invoke all SearchMCP tools and resources
+- [x] Current local agents can reach SearchMCP through the transitional proxy/client wiring
+
+## Block 2a. MCP GitHub Server
+
+Goal: move repository evidence access behind a dedicated MCP endpoint, aligned with the same transport boundary used for search evidence.
+
+- [x] GitHubMCP server bootstrap exists
+- [x] `github_list_directory` is exposed through GitHubMCP
+- [x] `github_get_file_content` is exposed through GitHubMCP
+- [x] `resource://github-api-status` is exposed
+- [x] Researcher reaches GitHubMCP through a thin MCP client/proxy layer
+- [x] GitHubMCP is built with `@modelcontextprotocol/sdk`, not a handwritten protocol server
+
+Definition of done:
+
+- [x] A client can discover and invoke all GitHubMCP tools and resources
+- [x] Current local researcher wiring can reach GitHubMCP through the transitional proxy/client layer
 
 ## Block 3. MCP Report Server
 
@@ -189,6 +212,8 @@ Goal: ensure the protocol-based architecture is testable end to end.
 - [ ] Validation covers retrieval
 - [ ] Validation covers SearchMCP tool/resource discovery
 - [ ] Validation covers Block 2 local-agent integration through SearchMCP
+- [x] Validation covers GitHubMCP tool/resource discovery
+- [x] Validation covers local-agent integration through GitHubMCP
 - [ ] Validation covers ReportMCP tool/resource discovery
 - [ ] Validation covers ACP agent registration
 - [ ] Validation covers Planner structured output via ACP

@@ -16,8 +16,10 @@ src/
 │   └── agent-handlers.ts
 ├── mcp/
 │   ├── search-server.ts
+│   ├── github-server.ts
 │   ├── report-server.ts
 │   ├── search-client.ts
+│   ├── github-client.ts
 │   └── report-client.ts
 ├── agents/
 │   ├── planner.ts
@@ -71,9 +73,9 @@ File names may vary slightly, but the boundaries below are mandatory.
 
 - `src/mcp/*`
   - Owns MCP transport layer.
-  - Exposes SearchMCP and ReportMCP servers.
+  - Exposes SearchMCP, GitHubMCP, and ReportMCP servers.
   - Owns MCP client creation for ACP agents and Supervisor.
-  - During `Block 2`, may also own a temporary compatibility layer so current local agents can route tool calls through SearchMCP before ACP migration is complete.
+  - During `Block 2`, may also own temporary compatibility layers so current local agents can route tool calls through SearchMCP and GitHubMCP before ACP migration is complete.
   - Must not contain Supervisor workflow logic.
 
 - `src/agents/*`
@@ -106,12 +108,13 @@ File names may vary slightly, but the boundaries below are mandatory.
 
 ## 3) Runtime Topology
 
-The system is split into four runtime surfaces:
+The system is split into five runtime surfaces:
 
 1. Supervisor CLI runtime
 2. SearchMCP server
-3. ReportMCP server
-4. ACP server
+3. GitHubMCP server
+4. ReportMCP server
+5. ACP server
 
 Expected communication graph:
 
@@ -119,15 +122,18 @@ Expected communication graph:
 CLI -> Supervisor
 Supervisor -> ACP Client -> ACP Server
 ACP Agent -> MCP Client -> SearchMCP
+ACP Researcher -> MCP Client -> GitHubMCP
 Supervisor -> MCP Client -> ReportMCP
 ```
 
 SearchMCP is shared by Planner, Researcher, and Critic.
+GitHubMCP is currently used by Researcher for repository evidence.
 ReportMCP is used by Supervisor for persistence only.
 
 Transitional rule:
 
 - In `Block 2`, existing local agents are allowed to access SearchMCP through a thin MCP client/proxy layer.
+- The current TS implementation also routes GitHub repository evidence through an analogous thin `GitHubMCP` proxy/client layer.
 - In `Block 4`, ACP agents must switch to direct MCP interaction as the steady-state architecture.
 
 ## 4) Core Flows
@@ -155,6 +161,14 @@ Transitional rule:
 3. It exposes `resource://knowledge-base-stats`.
 4. During `Block 2`, local agents may reuse the same MCP endpoint through a compatibility proxy.
 5. In the final architecture, ACP agents reuse the same MCP endpoint concurrently without local legacy wrappers.
+
+### GitHubMCP Flow
+
+1. MCP server boots once.
+2. It registers `github_list_directory` and `github_get_file_content`.
+3. It exposes `resource://github-api-status`.
+4. During the current transitional runtime, local Researcher tool adapters call GitHubMCP through a compatibility proxy.
+5. In the final architecture, ACP Researcher should consume the same MCP endpoint directly.
 
 ### ReportMCP Flow
 
@@ -213,6 +227,17 @@ Planner, Researcher, and Critic must preserve these semantics across ACP boundar
     - `documentCount`
     - `updatedAt`
 
+- GitHubMCP tools:
+  - `github_list_directory`
+  - `github_get_file_content`
+
+- GitHubMCP resources:
+  - `resource://github-api-status`
+  - payload fields:
+    - `apiBaseUrl`
+    - `tokenConfigured`
+    - `requestTimeoutMs`
+
 - ReportMCP tools:
   - `save_report`
 
@@ -258,12 +283,13 @@ Use already installed libraries before introducing custom transport code.
 Current findings from the local environment:
 
 - `@langchain/openai@1.4.3` already includes MCP-related support via `tools.mcp(...)` for OpenAI remote MCP integration.
-- Current project dependencies do not yet include `@modelcontextprotocol/sdk`.
+- Current project dependencies include `@modelcontextprotocol/sdk`.
 - Current codebase does not expose a ready-made generic LangChain adapter that replaces the need for our own thin MCP client wiring in the current `createAgent(...)` flow.
 
 Therefore:
 
 - SearchMCP server should be built on `@modelcontextprotocol/sdk`.
+- GitHubMCP server should also be built on `@modelcontextprotocol/sdk`.
 - Existing `src/tools/*` business logic should be reused as-is.
 - Any project-local MCP client layer should remain thin and focused on adapting protocol calls to the current agent/tool runtime.
 - We should not re-implement MCP protocol behavior manually if the SDK already provides the server/client primitives.
@@ -297,6 +323,7 @@ Role prompts for Supervisor, Planner, Researcher, and Critic must remain central
 - `knowledge_search` remains an adapter over the RAG layer.
 - `src/rag/*` remains decoupled from Supervisor and transport modules.
 - SearchMCP serves all three ACP agents.
+- GitHubMCP currently serves repository evidence for Researcher.
 - SearchMCP stats compute `documentCount` from unique `source` values in `.rag/knowledge-corpus.json`.
 - If the knowledge corpus is missing, `resource://knowledge-base-stats` must fail rather than return a fake empty success state.
 - ReportMCP is used only for report persistence concerns.
@@ -316,9 +343,11 @@ Validation coverage must include:
 - ingestion
 - retrieval
 - SearchMCP tool registration
+- GitHubMCP tool registration
 - ReportMCP tool registration
 - MCP resource exposure
 - Block 2 local-agent integration through SearchMCP proxy/client wiring
+- Local-agent integration through GitHubMCP proxy/client wiring
 - ACP agent registration
 - Planner structured output across ACP
 - Critic structured output across ACP

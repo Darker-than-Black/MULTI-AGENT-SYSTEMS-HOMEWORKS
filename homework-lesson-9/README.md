@@ -1,5 +1,8 @@
 # Домашнє завдання: MCP + ACP для мультиагентної системи (розширення hw8)
 
+> Implementation note for this TypeScript repo:
+> original homework requirements target 2 MCP servers (`SearchMCP`, `ReportMCP`), but the current TS implementation also introduces a third MCP endpoint, `GitHubMCP`, so repository evidence can stay on the same protocol boundary as search evidence during the transition to ACP.
+
 Візьміть мультиагентну систему з `homework-lesson-8` (Supervisor + Planner, Researcher, Critic) і переведіть на архітектуру з протоколами комунікації:
 
 - **MCP** — для інструментів (tools) кожного агента
@@ -32,9 +35,12 @@ Supervisor Agent (локальний, create_agent)
   │                                                                              knowledge_search)
   │
   ├── delegate_to_researcher(plan)      ──► ACP ──► Research Agent ──► MCP ──► SearchMCP
-  │                                                                             (web_search,
-  │                                                                              read_url,
-  │                                                                              knowledge_search)
+  │                                                            │                (web_search,
+  │                                                            │                 read_url,
+  │                                                            │                 knowledge_search)
+  │                                                            └──────────────► GitHubMCP
+  │                                                                             (github_list_directory,
+  │                                                                              github_get_file_content)
   │
   ├── delegate_to_critic(findings)      ──► ACP ──► Critic Agent   ──► MCP ──► SearchMCP
   │       │
@@ -57,8 +63,10 @@ Supervisor Agent (локальний, create_agent)
 |:---|:---:|:---|:---|
 | **SearchMCP** | 8901 | `web_search`, `read_url`, `knowledge_search` | `resource://knowledge-base-stats` — кількість документів, дата останнього оновлення |
 | **ReportMCP** | 8902 | `save_report` | `resource://output-dir` — шлях до директорії та список збережених звітів |
+| **GitHubMCP** | 8904 | `github_list_directory`, `github_get_file_content` | `resource://github-api-status` — базовий API URL, token status, timeout |
 
 > SearchMCP використовується трьома агентами одночасно — кожен підключається до одного й того ж серверу.
+> У фактичній TS-реалізації Researcher також використовує окремий `GitHubMCP` для repo evidence.
 
 Кожен tool повторює логіку з homework-8 (або homework-5), але тепер обгорнутий як MCP tool через FastMCP. Використовуйте документацію FastMCP та приклади з лекції 9.
 
@@ -133,7 +141,8 @@ python main.py
 
 ### Вимоги
 
-- [ ] 2 MCP сервери (SearchMCP, ReportMCP) з tools та resources
+- [ ] Мінімум 2 MCP сервери (SearchMCP, ReportMCP) з tools та resources
+- [ ] Поточна TS-реалізація додатково може містити `GitHubMCP` для repository evidence
 - [ ] 1 ACP сервер з 3 агентами (planner, researcher, critic)
 - [ ] Кожен ACP агент підключається до SearchMCP через `fastmcp.Client`
 - [ ] Кожен ACP агент створений через `create_agent`

@@ -10,9 +10,7 @@ import { getKnowledgeCorpusPath, loadKnowledgeCorpus } from "../rag/store";
 import { knowledgeSearch } from "../tools/knowledge-search";
 import { readUrl } from "../tools/read-url";
 import { webSearch } from "../tools/web-search";
-import type { KnowledgeBaseStats } from "./search-client";
-
-const SEARCH_MCP_RESOURCE_URI = "resource://knowledge-base-stats";
+import { SEARCH_MCP_RESOURCE_URI, type KnowledgeBaseStats } from "./contracts";
 
 export function createSearchMcpServer(): McpServer {
   const server = new McpServer(

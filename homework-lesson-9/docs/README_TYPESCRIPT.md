@@ -28,7 +28,7 @@
 | Tools підключені локально в одному процесі | Tools винесені в окремі MCP servers |
 | Planner / Researcher / Critic викликаються локально | Planner / Researcher / Critic доступні через ACP server |
 | Supervisor працює з subagent wrappers | Supervisor делегує задачі через ACP client wrappers |
-| Один runtime process | Кілька runtime endpoints: SearchMCP, ReportMCP, ACP server, Supervisor CLI |
+| Один runtime process | Кілька runtime endpoints: SearchMCP, GitHubMCP, ReportMCP, ACP server, Supervisor CLI |
 | Прямий import tool adapters | MCP discovery + invocation |
 
 ---
@@ -68,6 +68,7 @@ Supervisor Agent (local)
   +- delegate_to_researcher(plan, feedback?)
   |      -> ACP Client -> ACP Server -> Researcher Agent
   |                                      -> MCP Client -> SearchMCP
+  |                                      -> MCP Client -> GitHubMCP
   |
   +- delegate_to_critic(findings)
   |      -> ACP Client -> ACP Server -> Critic Agent
@@ -98,6 +99,27 @@ Supervisor Agent (local)
 - `knowledge_search` продовжує делегувати в `src/rag/*`
 - на етапі `Block 2` локальні агенти вже повинні викликати `SearchMCP`, але через thin proxy/client layer, сумісний з поточним `createAgent(...)` flow
 - на етапі `Block 4` цей тимчасовий proxy layer має бути замінений на пряму MCP-взаємодію з боку agent runtime
+
+Implementation status:
+
+- реалізовано в `src/mcp/search-server.ts`
+- локальні LangChain tools викликають `SearchMCP` через `src/mcp/search-client.ts`
+- поточний runtime вимагає запущеного `SearchMCP`, що відповідає вимозі `Block 2`
+
+### GitHubMCP
+
+Призначення:
+
+- expose `github_list_directory`
+- expose `github_get_file_content`
+- expose resource `resource://github-api-status`
+
+Очікування:
+
+- `GitHubMCP` не є вимогою оригінального homework contract, але є фактичною TS-реалізацією для repo evidence
+- ним користується `Researcher`
+- server містить лише transport bootstrap, а repo business logic лишається в `src/tools/github-*`
+- локальні агенти викликають `GitHubMCP` через thin proxy/client layer, так само як `SearchMCP`
 
 ### ReportMCP
 
@@ -245,8 +267,10 @@ homework-lesson-9/
 │   │   └── agent-handlers.ts
 │   ├── mcp/
 │   │   ├── search-server.ts
+│   │   ├── github-server.ts
 │   │   ├── report-server.ts
 │   │   ├── search-client.ts
+│   │   ├── github-client.ts
 │   │   └── report-client.ts
 │   ├── agents/
 │   │   ├── planner.ts
@@ -287,6 +311,7 @@ homework-lesson-9/
 Для `SearchMCP` приймається такий поетапний підхід:
 
 - `Block 2`: агенти викликають MCP через `src/mcp/search-client.ts` або еквівалентний thin proxy
+- Поточна фактична реалізація також використовує `src/mcp/github-client.ts` для GitHub-based repo evidence
 - `Block 4`: ACP agents переходять на пряму взаємодію з MCP runtime без проміжної legacy-style tool wiring
 
 ---

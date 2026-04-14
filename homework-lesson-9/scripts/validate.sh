@@ -13,14 +13,22 @@ echo "[validate] Running architecture invariants..."
 npm run invariant:check
 
 SEARCH_MCP_LOG="$(mktemp)"
+GITHUB_MCP_LOG="$(mktemp)"
 echo "[validate] Starting SearchMCP server..."
 npm run mcp:search >"$SEARCH_MCP_LOG" 2>&1 &
 SEARCH_MCP_PID=$!
+echo "[validate] Starting GitHubMCP server..."
+npm run mcp:github >"$GITHUB_MCP_LOG" 2>&1 &
+GITHUB_MCP_PID=$!
 
 cleanup() {
   if [[ -n "${SEARCH_MCP_PID:-}" ]] && kill -0 "$SEARCH_MCP_PID" 2>/dev/null; then
     kill "$SEARCH_MCP_PID" 2>/dev/null || true
     wait "$SEARCH_MCP_PID" 2>/dev/null || true
+  fi
+  if [[ -n "${GITHUB_MCP_PID:-}" ]] && kill -0 "$GITHUB_MCP_PID" 2>/dev/null; then
+    kill "$GITHUB_MCP_PID" 2>/dev/null || true
+    wait "$GITHUB_MCP_PID" 2>/dev/null || true
   fi
 }
 
@@ -29,6 +37,9 @@ sleep 2
 
 echo "[validate] Running SearchMCP discovery + invocation validation..."
 bash scripts/smoke-search-mcp.sh
+
+echo "[validate] Running GitHubMCP discovery + invocation validation..."
+bash scripts/smoke-github-mcp.sh
 
 echo "[validate] Running planner validation through SearchMCP..."
 node --input-type=module --import tsx -e '
@@ -114,12 +125,14 @@ echo "[validate] Checking protocol baseline config..."
 node --input-type=module --import tsx -e '
 import {
   ACP_URL,
+  GITHUB_MCP_URL,
   REPORT_MCP_URL,
   SEARCH_MCP_URL,
 } from "./src/config/env.ts";
 
 for (const [key, value] of Object.entries({
   SEARCH_MCP_URL,
+  GITHUB_MCP_URL,
   REPORT_MCP_URL,
   ACP_URL,
 })) {
@@ -130,6 +143,7 @@ for (const [key, value] of Object.entries({
 
 console.log(JSON.stringify({
   SEARCH_MCP_URL,
+  GITHUB_MCP_URL,
   REPORT_MCP_URL,
   ACP_URL,
 }, null, 2));
