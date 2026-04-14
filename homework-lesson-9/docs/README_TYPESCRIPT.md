@@ -144,11 +144,16 @@ Implementation status:
 
 ## ACP Layer
 
-Один ACP server має публікувати три agent endpoints:
+Один ACP server має публікувати три agent endpoints через thin HTTP layer:
 
 - `planner`
 - `researcher`
 - `critic`
+
+Фактичний transport contract:
+
+- `GET /agents`
+- `POST /runs`
 
 Кожен ACP агент:
 
@@ -156,6 +161,12 @@ Implementation status:
 2. отримує MCP tools у форматі, який можна передати в LangChain agent
 3. створюється через `createAgent(...)`
 4. повертає відповідь, придатну для Supervisor delegation flow
+
+Implementation status:
+
+- реалізовано в `src/acp/server.ts`, `src/acp/client.ts`, `src/acp/agent-handlers.ts`
+- ACP runtime напряму ходить у `SearchMCP` і `GitHubMCP` через MCP clients, без transitional proxy layer з `src/tools/langchain-tools.ts`
+- Supervisor тепер делегує `planner`, `researcher`, `critic` через `src/acp/client.ts`, лишаючись локальним orchestration layer з HITL і ReportMCP save-flow
 
 Planner і Critic зберігають structured output:
 

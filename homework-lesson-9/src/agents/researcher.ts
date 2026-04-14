@@ -1,5 +1,4 @@
 import { HumanMessage } from "@langchain/core/messages";
-import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
 import { appendAssistantMessage, appendUserMessage } from "../agent/memory";
 import type {
@@ -10,8 +9,11 @@ import {
   getResearchTurnRecursionLimit,
   getResearchWorkflowRecursionLimit,
 } from "../config/agent-policy";
-import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts";
+import {
+  FindingsEnvelopeSchema,
+  type FindingsEnvelope,
+} from "../schemas/findings-envelope";
 import type { ResearchPlan } from "../schemas/research-plan";
 import {
   githubGetFileContentTool,
@@ -21,6 +23,7 @@ import {
   webSearchTool,
 } from "../tools/langchain-tools";
 import { buildToolExecutionTrace, stringifyMessageContent } from "../utils/agent-trace";
+import { createDefaultChatModel, type AgentToolSet } from "./shared";
 
 export interface ResearchInput {
   userRequest: string;
@@ -30,43 +33,51 @@ export interface ResearchInput {
 
 let researcherAgent: ReturnType<typeof createAgent> | null = null;
 
-export function createResearcherAgent() {
-  if (researcherAgent) {
+interface CreateResearcherAgentOptions {
+  tools?: AgentToolSet;
+}
+
+const defaultResearcherTools: AgentToolSet = [
+  webSearchTool,
+  readUrlTool,
+  githubListDirectoryTool,
+  githubGetFileContentTool,
+  knowledgeSearchTool,
+];
+
+export function createResearcherAgent(options: CreateResearcherAgentOptions = {}) {
+  const hasOverrides = options.tools !== undefined;
+  if (!hasOverrides && researcherAgent) {
     return researcherAgent;
   }
 
-  if (!OPENAI_API_KEY.trim()) {
-    throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-9/.env.");
+  const agent = createAgent({
+    model: createDefaultChatModel(),
+    systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT.trim(),
+    tools: options.tools ?? defaultResearcherTools,
+  });
+
+  if (!hasOverrides) {
+    researcherAgent = agent;
   }
 
-  const model = new ChatOpenAI({
-    model: MODEL_NAME,
-    temperature: TEMPERATURE,
-    apiKey: OPENAI_API_KEY,
-  });
-
-  researcherAgent = createAgent({
-    model,
-    systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT.trim(),
-    tools: [
-      webSearchTool,
-      readUrlTool,
-      githubListDirectoryTool,
-      githubGetFileContentTool,
-      knowledgeSearchTool,
-    ],
-  });
-
-  return researcherAgent;
+  return agent;
 }
 
-export async function research(input: ResearchInput): Promise<string> {
+interface ResearchOptions {
+  agent?: ReturnType<typeof createAgent>;
+}
+
+export async function research(
+  input: ResearchInput,
+  options: ResearchOptions = {},
+): Promise<string> {
   const normalizedUserRequest = input.userRequest.trim();
   if (!normalizedUserRequest) {
     throw new Error("Researcher userRequest cannot be empty.");
   }
 
-  const researcher = createResearcherAgent();
+  const researcher = options.agent ?? createResearcherAgent();
   const recursionLimit = getResearchWorkflowRecursionLimit(input.plan.searchQueries.length);
   let result = await researcher.invoke(
     { messages: [new HumanMessage(buildResearchPrompt(input))] },
@@ -88,6 +99,14 @@ export async function research(input: ResearchInput): Promise<string> {
   const lastMessage = result.messages.at(-1);
   const finalAnswer = lastMessage ? stringifyMessageContent(lastMessage.content).trim() : "";
   return finalAnswer || "Researcher returned an empty response.";
+}
+
+export async function researchToEnvelope(
+  input: ResearchInput,
+  options: ResearchOptions = {},
+): Promise<FindingsEnvelope> {
+  const markdown = await research(input, options);
+  return FindingsEnvelopeSchema.parse({ markdown });
 }
 
 export async function runResearchTurn(

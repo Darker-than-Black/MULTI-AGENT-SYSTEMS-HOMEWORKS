@@ -1,46 +1,53 @@
 import { HumanMessage } from "@langchain/core/messages";
-import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
 import { getPlannerRecursionLimit } from "../config/agent-policy";
-import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { PLANNER_SYSTEM_PROMPT } from "../config/prompts";
 import { ResearchPlanSchema, type ResearchPlan } from "../schemas/research-plan";
 import { knowledgeSearchTool, webSearchTool } from "../tools/langchain-tools";
+import { createDefaultChatModel, type AgentToolSet } from "./shared";
 
 let plannerAgent: ReturnType<typeof createAgent> | null = null;
 
-export function createPlannerAgent() {
-  if (plannerAgent) {
+interface CreatePlannerAgentOptions {
+  tools?: AgentToolSet;
+}
+
+const defaultPlannerTools: AgentToolSet = [webSearchTool, knowledgeSearchTool];
+
+export function createPlannerAgent(options: CreatePlannerAgentOptions = {}) {
+  const hasOverrides = options.tools !== undefined;
+  if (!hasOverrides && plannerAgent) {
     return plannerAgent;
   }
 
-  if (!OPENAI_API_KEY.trim()) {
-    throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-9/.env.");
-  }
-
-  const model = new ChatOpenAI({
-    model: MODEL_NAME,
-    temperature: TEMPERATURE,
-    apiKey: OPENAI_API_KEY,
-  });
-
-  plannerAgent = createAgent({
-    model,
+  const agent = createAgent({
+    model: createDefaultChatModel(),
     systemPrompt: PLANNER_SYSTEM_PROMPT.trim(),
-    tools: [webSearchTool, knowledgeSearchTool],
+    tools: options.tools ?? defaultPlannerTools,
     responseFormat: ResearchPlanSchema,
   });
 
-  return plannerAgent;
+  if (!hasOverrides) {
+    plannerAgent = agent;
+  }
+
+  return agent;
 }
 
-export async function planResearch(userRequest: string): Promise<ResearchPlan> {
+interface PlanResearchOptions {
+  agent?: ReturnType<typeof createAgent>;
+}
+
+export async function planResearch(
+  userRequest: string,
+  options: PlanResearchOptions = {},
+): Promise<ResearchPlan> {
   const normalizedRequest = userRequest.trim();
   if (!normalizedRequest) {
     throw new Error("Planner request cannot be empty.");
   }
 
-  const planner = createPlannerAgent();
+  const planner = options.agent ?? createPlannerAgent();
   const result = await planner.invoke(
     { messages: [new HumanMessage(normalizedRequest)] },
     { recursionLimit: getPlannerRecursionLimit() },

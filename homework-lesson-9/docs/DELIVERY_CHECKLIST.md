@@ -18,7 +18,8 @@ A change set is not complete until:
 - [x] Local agents reach `SearchMCP` through a thin MCP client/proxy layer
 - [x] The factual TS runtime also includes `GitHubMCP` for repository evidence used by `Researcher`
 - [x] `Block 3. MCP Report Server` is implemented and validated
-- [ ] `ACP server` remains pending
+- [x] `Block 4. ACP server` is implemented and validated
+- [x] `Block 7. Supervisor ACP delegation` is implemented and validated
 
 ## Block 0. Baseline Alignment
 
@@ -107,71 +108,71 @@ Definition of done:
 
 Goal: publish Planner, Researcher, and Critic as remote agents.
 
-- [ ] One ACP server hosts all three agents
-- [ ] Planner endpoint is registered
-- [ ] Researcher endpoint is registered
-- [ ] Critic endpoint is registered
-- [ ] Each ACP agent connects to SearchMCP through an MCP client
-- [ ] MCP tools are adapted for LangChain agent usage
-- [ ] Transitional Block 2 proxy-based MCP wiring is replaced with direct MCP interaction in the ACP agent runtime
+- [x] One ACP server hosts all three agents
+- [x] Planner endpoint is registered
+- [x] Researcher endpoint is registered
+- [x] Critic endpoint is registered
+- [x] Each ACP agent connects to SearchMCP through an MCP client
+- [x] MCP tools are adapted for LangChain agent usage
+- [x] Transitional Block 2 proxy-based MCP wiring is replaced with direct MCP interaction in the ACP agent runtime
 
 Definition of done:
 
-- [ ] Supervisor can delegate to all three agents without local direct imports of their tools
+- [x] A client can discover and invoke all three ACP agent endpoints
 
 ## Block 5. Structured Contracts Across Protocols
 
 Goal: preserve stable handoff shapes across ACP boundaries.
 
-- [ ] `ResearchPlan` remains defined in `src/schemas/*`
-- [ ] `FindingsEnvelope` is defined in `src/schemas/*`
-- [ ] `CritiqueResult` remains defined in `src/schemas/*`
-- [ ] Planner returns structured output through ACP
-- [ ] Researcher returns `FindingsEnvelope` through ACP
-- [ ] Critic returns structured output through ACP
-- [ ] Researcher findings format is explicit and stable
-- [ ] `FindingsEnvelope.markdown` is self-contained and critique-ready
-- [ ] `FindingsEnvelope.markdown` contains evidence-oriented sections
-- [ ] Serialization/deserialization rules are defined for ACP handoffs
+- [x] `ResearchPlan` remains defined in `src/schemas/*`
+- [x] `FindingsEnvelope` is defined in `src/schemas/*`
+- [x] `CritiqueResult` remains defined in `src/schemas/*`
+- [x] Planner returns structured output through ACP
+- [x] Researcher returns `FindingsEnvelope` through ACP
+- [x] Critic returns structured output through ACP
+- [x] Researcher findings format is explicit and stable
+- [x] `FindingsEnvelope.markdown` is self-contained and critique-ready
+- [x] `FindingsEnvelope.markdown` contains evidence-oriented sections
+- [x] Serialization/deserialization rules are defined for ACP handoffs
 
 Definition of done:
 
-- [ ] Structured outputs remain valid after transport serialization
+- [x] Structured outputs remain valid after transport serialization
 
 ## Block 6. Agent Implementations
 
 Goal: preserve role behavior while swapping local tools for MCP-provided tools.
 
-- [ ] Planner is created via LangChain `createAgent`
-- [ ] Planner uses MCP-backed `web_search` and `knowledge_search`
-- [ ] Researcher is created via LangChain `createAgent`
-- [ ] Researcher uses MCP-backed `web_search`, `read_url`, and `knowledge_search`
-- [ ] Researcher produces markdown findings inside `FindingsEnvelope`
-- [ ] Critic is created via LangChain `createAgent`
-- [ ] Critic uses MCP-backed evidence tools
-- [ ] Critic consumes `plan` together with `findings`
-- [ ] Prompts stay role-specific and centralized
+- [x] Planner is created via LangChain `createAgent`
+- [x] Planner uses MCP-backed `web_search` and `knowledge_search`
+- [x] Researcher is created via LangChain `createAgent`
+- [x] Researcher uses MCP-backed `web_search`, `read_url`, and `knowledge_search`
+- [x] Researcher produces markdown findings inside `FindingsEnvelope`
+- [x] Critic is created via LangChain `createAgent`
+- [x] Critic uses MCP-backed evidence tools
+- [x] Critic consumes `plan` together with `findings`
+- [x] Prompts stay role-specific and centralized
 
 Definition of done:
 
-- [ ] Agent role behavior is preserved after the protocol migration
+- [x] Agent role behavior is preserved after the protocol migration
 
 ## Block 7. Supervisor ACP Delegation
 
 Goal: replace local subagent-tool wrappers with ACP delegation wrappers.
 
-- [ ] Supervisor remains a local orchestration layer
-- [ ] Supervisor invokes Planner through ACP
-- [ ] Supervisor invokes Researcher through ACP
-- [ ] Supervisor invokes Critic through ACP
-- [ ] Supervisor passes `plan` into both Researcher and Critic
-- [ ] Supervisor does not instantiate role agents as local business logic
-- [ ] Supervisor keeps code-enforced revision-round limits
-- [ ] Supervisor prepares the final markdown report after approval from Critic
+- [x] Supervisor remains a local orchestration layer
+- [x] Supervisor invokes Planner through ACP
+- [x] Supervisor invokes Researcher through ACP
+- [x] Supervisor invokes Critic through ACP
+- [x] Supervisor passes `plan` into both Researcher and Critic
+- [x] Supervisor does not instantiate role agents as local business logic
+- [x] Supervisor keeps code-enforced revision-round limits
+- [x] Supervisor prepares the final markdown report after approval from Critic
 
 Definition of done:
 
-- [ ] The runtime supports `Plan -> Research -> Critique -> Research -> Critique -> Report` through ACP delegation
+- [x] The runtime supports `Plan -> Research -> Critique -> Research -> Critique -> Report` through ACP delegation
 
 ## Block 8. HITL + Report Save Flow
 
@@ -216,10 +217,10 @@ Goal: ensure the protocol-based architecture is testable end to end.
 - [x] Validation covers GitHubMCP tool/resource discovery
 - [x] Validation covers local-agent integration through GitHubMCP
 - [x] Validation covers ReportMCP tool/resource discovery
-- [ ] Validation covers ACP agent registration
-- [ ] Validation covers Planner structured output via ACP
-- [ ] Validation covers Critic structured output via ACP
-- [ ] Validation covers Supervisor orchestration through ACP
+- [x] Validation covers ACP agent registration
+- [x] Validation covers Planner structured output via ACP
+- [x] Validation covers Critic structured output via ACP
+- [x] Validation covers Supervisor orchestration through ACP
 - [ ] Validation covers HITL interrupt/resume with ReportMCP save flow
 
 Definition of done:

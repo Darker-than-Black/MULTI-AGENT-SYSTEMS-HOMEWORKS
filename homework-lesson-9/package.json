@@ -9,6 +9,8 @@
     "mcp:search": "tsx src/mcp/search-server.ts",
     "mcp:github": "tsx src/mcp/github-server.ts",
     "mcp:report": "tsx src/mcp/report-server.ts",
+    "acp:server": "tsx src/acp/server.ts",
+    "dev:stack": "bash scripts/dev-stack.sh",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "check": "tsc --noEmit",

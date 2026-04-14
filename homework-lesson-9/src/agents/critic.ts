@@ -1,61 +1,78 @@
 import { HumanMessage } from "@langchain/core/messages";
-import { ChatOpenAI } from "@langchain/openai";
 import { createAgent } from "langchain";
 import { getCriticRecursionLimit } from "../config/agent-policy";
 import { CritiqueResultSchema, type CritiqueResult } from "../schemas/critique-result";
-import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
 import { CRITIC_SYSTEM_PROMPT } from "../config/prompts";
+import {
+  FindingsEnvelopeSchema,
+  type FindingsEnvelope,
+} from "../schemas/findings-envelope";
 import type { ResearchPlan } from "../schemas/research-plan";
 import { knowledgeSearchTool, readUrlTool, webSearchTool } from "../tools/langchain-tools";
+import { createDefaultChatModel, type AgentToolSet } from "./shared";
 
 export interface CritiqueInput {
   userRequest: string;
-  findings: string;
+  findings: string | FindingsEnvelope;
   plan: ResearchPlan;
 }
 
 let criticAgent: ReturnType<typeof createAgent> | null = null;
 
-export function createCriticAgent() {
-  if (criticAgent) {
+interface CreateCriticAgentOptions {
+  tools?: AgentToolSet;
+}
+
+const defaultCriticTools: AgentToolSet = [webSearchTool, readUrlTool, knowledgeSearchTool];
+
+export function createCriticAgent(options: CreateCriticAgentOptions = {}) {
+  const hasOverrides = options.tools !== undefined;
+  if (!hasOverrides && criticAgent) {
     return criticAgent;
   }
 
-  if (!OPENAI_API_KEY.trim()) {
-    throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-9/.env.");
-  }
-
-  const model = new ChatOpenAI({
-    model: MODEL_NAME,
-    temperature: TEMPERATURE,
-    apiKey: OPENAI_API_KEY,
-  });
-
-  criticAgent = createAgent({
-    model,
+  const agent = createAgent({
+    model: createDefaultChatModel(),
     systemPrompt: CRITIC_SYSTEM_PROMPT.trim(),
-    tools: [webSearchTool, readUrlTool, knowledgeSearchTool],
+    tools: options.tools ?? defaultCriticTools,
     responseFormat: CritiqueResultSchema,
   });
 
-  return criticAgent;
+  if (!hasOverrides) {
+    criticAgent = agent;
+  }
+
+  return agent;
 }
 
-export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
+interface CritiqueOptions {
+  agent?: ReturnType<typeof createAgent>;
+}
+
+export async function critique(
+  input: CritiqueInput,
+  options: CritiqueOptions = {},
+): Promise<CritiqueResult> {
   const normalizedRequest = input.userRequest.trim();
   if (!normalizedRequest) {
     throw new Error("Critic userRequest cannot be empty.");
   }
 
-  const normalizedFindings = input.findings.trim();
-  if (!normalizedFindings) {
-    throw new Error("Critic findings cannot be empty.");
-  }
-
+  const normalizedFindings = FindingsEnvelopeSchema.parse(
+    typeof input.findings === "string"
+      ? { markdown: input.findings }
+      : input.findings,
+  );
   const normalizedPlan = input.plan;
-  const critic = createCriticAgent();
+  const critic = options.agent ?? createCriticAgent();
   const result = await critic.invoke(
-    { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings, normalizedPlan))] },
+    {
+      messages: [
+        new HumanMessage(
+          buildCritiquePrompt(normalizedRequest, normalizedFindings.markdown, normalizedPlan),
+        ),
+      ],
+    },
     { recursionLimit: getCriticRecursionLimit() },
   );
 

@@ -1,9 +1,8 @@
 import { tool } from "langchain";
 import { z } from "zod";
-import { critique } from "../agents/critic";
-import { planResearch } from "../agents/planner";
-import { research } from "../agents/researcher";
+import { runAcpAgent } from "../acp/client";
 import { CritiqueResultSchema } from "../schemas/critique-result";
+import { FindingsEnvelopeSchema } from "../schemas/findings-envelope";
 import { ResearchPlanSchema } from "../schemas/research-plan";
 import { writeReportTool } from "../tools/langchain-tools";
 import type { ProgressLogger } from "../utils/logger";
@@ -32,7 +31,8 @@ export const planResearchTool = tool(
   async ({ userRequest }) => {
     emitSupervisorProgress("planner", "start", "Planner started", userRequest);
     try {
-      const result = await planResearch(userRequest);
+      const response = await runAcpAgent("planner", { userRequest });
+      const result = ResearchPlanSchema.parse(response.output);
       emitSupervisorProgress(
         "planner",
         "success",
@@ -68,19 +68,20 @@ export const runResearchTool = tool(
     );
 
     try {
-      const findings = await research({
+      const response = await runAcpAgent("researcher", {
         userRequest,
         plan: normalizedPlan,
         critiqueFeedback,
       });
+      const findings = FindingsEnvelopeSchema.parse(response.output);
       emitSupervisorProgress(
         "researcher",
         "success",
         "Researcher finished",
-        `${findings.trim().length} chars`,
+        `${findings.markdown.trim().length} chars`,
       );
       emitSupervisorProgress("supervisor", "info", "Supervisor routed findings to Critic");
-      return findings;
+      return findings.markdown;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown researcher error.";
       emitSupervisorProgress("researcher", "error", "Researcher failed", message);
@@ -101,9 +102,15 @@ export const runResearchTool = tool(
 export const critiqueFindingsTool = tool(
   async ({ userRequest, findings, plan }) => {
     const normalizedPlan = ResearchPlanSchema.parse(plan);
+    const normalizedFindings = FindingsEnvelopeSchema.parse({ markdown: findings });
     emitSupervisorProgress("critic", "start", "Critic started");
     try {
-      const result = await critique({ userRequest, findings, plan: normalizedPlan });
+      const response = await runAcpAgent("critic", {
+        userRequest,
+        findings: normalizedFindings,
+        plan: normalizedPlan,
+      });
+      const result = CritiqueResultSchema.parse(response.output);
       emitSupervisorProgress(
         "critic",
         "success",

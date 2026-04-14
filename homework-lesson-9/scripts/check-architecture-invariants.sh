@@ -9,6 +9,7 @@ cd "$PROJECT_DIR"
 RESEARCHER_FILE="src/agents/researcher.ts"
 CRITIC_FILE="src/agents/critic.ts"
 SUPERVISOR_FILE="src/supervisor/create-supervisor.ts"
+SUPERVISOR_TOOLS_FILE="src/supervisor/supervisor-tools.ts"
 RAG_DIR="src/rag"
 KNOWLEDGE_SEARCH_FILE="src/tools/knowledge-search.ts"
 LANGCHAIN_TOOLS_FILE="src/tools/langchain-tools.ts"
@@ -39,6 +40,12 @@ if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "humanInTheLoopMiddleware" "$SUPERVI
 fi
 if [[ -f "$SUPERVISOR_FILE" ]] && ! grep -q "MemorySaver" "$SUPERVISOR_FILE"; then
   echo "Invariant violation: create-supervisor.ts must configure MemorySaver for resume flow."
+  exit 1
+fi
+
+echo "[invariants] Checking: supervisor delegation stays on ACP wrappers"
+if [[ -f "$SUPERVISOR_TOOLS_FILE" ]] && grep -q 'from "../agents/' "$SUPERVISOR_TOOLS_FILE"; then
+  echo "Invariant violation: supervisor-tools.ts must not import local role agents directly."
   exit 1
 fi
 

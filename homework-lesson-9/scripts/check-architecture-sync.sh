@@ -12,7 +12,7 @@ cd "$REPO_ROOT"
 
 ARCH_FILE="${PROJECT_REL}/docs/ARCHITECTURE.md"
 TYPE_CONTRACT_FILE="${PROJECT_REL}/src/agent/types.ts"
-MODULE_BOUNDARY_PATTERN="^${PROJECT_REL}/src/(agent|agents|supervisor|schemas|tools|config|utils|rag)/"
+MODULE_BOUNDARY_PATTERN="^${PROJECT_REL}/src/(agent|agents|supervisor|acp|mcp|schemas|tools|config|utils|rag)/"
 
 if [[ ! -f "$ARCH_FILE" ]]; then
   echo "Architecture check failed: missing $ARCH_FILE"

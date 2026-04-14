@@ -134,7 +134,8 @@ Transitional rule:
 
 - In `Block 2`, existing local agents are allowed to access SearchMCP through a thin MCP client/proxy layer.
 - The current TS implementation also routes GitHub repository evidence through an analogous thin `GitHubMCP` proxy/client layer.
-- In `Block 4`, ACP agents must switch to direct MCP interaction as the steady-state architecture.
+- In `Block 4`, ACP agents switch to direct MCP interaction as the steady-state architecture.
+- In `Block 7`, Supervisor switches from local direct role imports to ACP delegation wrappers while keeping HITL and report persistence local.
 
 ## 4) Core Flows
 
@@ -246,7 +247,13 @@ Planner, Researcher, and Critic must preserve these semantics across ACP boundar
 
 ### ACP Contract
 
-ACP server must expose three distinct remote roles:
+ACP server is implemented in this TypeScript repo as a thin HTTP transport layer.
+It must expose:
+
+- `GET /agents`
+- `POST /runs`
+
+It must also expose three distinct remote roles:
 
 - `planner`
 - `researcher`
@@ -254,11 +261,11 @@ ACP server must expose three distinct remote roles:
 
 Expected handoffs:
 
-- Supervisor -> Planner: original user request
+- Supervisor -> Planner: `{ userRequest }`
 - Planner -> Supervisor: `ResearchPlan`
-- Supervisor -> Researcher: user request + `ResearchPlan` + optional revision requests
+- Supervisor -> Researcher: `{ userRequest, plan, critiqueFeedback? }`
 - Researcher -> Supervisor: `FindingsEnvelope`
-- Supervisor -> Critic: original user request + `FindingsEnvelope` + `ResearchPlan`
+- Supervisor -> Critic: `{ userRequest, findings, plan }`
 - Critic -> Supervisor: `CritiqueResult`
 
 Canonical first-version contracts:

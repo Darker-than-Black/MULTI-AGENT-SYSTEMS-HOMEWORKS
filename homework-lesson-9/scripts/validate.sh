@@ -15,6 +15,7 @@ npm run invariant:check
 SEARCH_MCP_LOG="$(mktemp)"
 GITHUB_MCP_LOG="$(mktemp)"
 REPORT_MCP_LOG="$(mktemp)"
+ACP_LOG="$(mktemp)"
 echo "[validate] Starting SearchMCP server..."
 npm run mcp:search >"$SEARCH_MCP_LOG" 2>&1 &
 SEARCH_MCP_PID=$!
@@ -24,6 +25,9 @@ GITHUB_MCP_PID=$!
 echo "[validate] Starting ReportMCP server..."
 npm run mcp:report >"$REPORT_MCP_LOG" 2>&1 &
 REPORT_MCP_PID=$!
+echo "[validate] Starting ACP server..."
+npm run acp:server >"$ACP_LOG" 2>&1 &
+ACP_PID=$!
 
 cleanup() {
   if [[ -n "${SEARCH_MCP_PID:-}" ]] && kill -0 "$SEARCH_MCP_PID" 2>/dev/null; then
@@ -38,6 +42,10 @@ cleanup() {
     kill "$REPORT_MCP_PID" 2>/dev/null || true
     wait "$REPORT_MCP_PID" 2>/dev/null || true
   fi
+  if [[ -n "${ACP_PID:-}" ]] && kill -0 "$ACP_PID" 2>/dev/null; then
+    kill "$ACP_PID" 2>/dev/null || true
+    wait "$ACP_PID" 2>/dev/null || true
+  fi
 }
 
 trap cleanup EXIT
@@ -51,6 +59,9 @@ bash scripts/smoke-github-mcp.sh
 
 echo "[validate] Running ReportMCP discovery + invocation validation..."
 bash scripts/smoke-report-mcp.sh
+
+echo "[validate] Running ACP discovery + invocation validation..."
+bash scripts/smoke-acp.sh
 
 echo "[validate] Running write_report tool validation through ReportMCP..."
 node --input-type=module --import tsx -e '
@@ -95,7 +106,7 @@ console.log(JSON.stringify(plan, null, 2));
 
 echo "[validate] Running researcher validation through SearchMCP..."
 node --input-type=module --import tsx -e '
-import { research } from "./src/agents/researcher.ts";
+import { researchToEnvelope } from "./src/agents/researcher.ts";
 import { ResearchPlanSchema } from "./src/schemas/research-plan.ts";
 
 const plan = ResearchPlanSchema.parse({
@@ -105,22 +116,23 @@ const plan = ResearchPlanSchema.parse({
   outputFormat: "Short evidence-grounded summary",
 });
 
-const findings = await research({
+const findings = await researchToEnvelope({
   userRequest: "Use the local knowledge base to explain what retrieval-augmented generation is.",
   plan,
 });
 
-if (!findings.trim()) {
-  throw new Error("Researcher should return non-empty findings.");
+if (!findings.markdown.trim()) {
+  throw new Error("Researcher should return non-empty findings markdown.");
 }
 
-console.log(findings);
+console.log(JSON.stringify(findings, null, 2));
 '
 
 echo "[validate] Running critic validation through SearchMCP..."
 node --input-type=module --import tsx -e '
 import { critique } from "./src/agents/critic.ts";
 import { CritiqueResultSchema } from "./src/schemas/critique-result.ts";
+import { FindingsEnvelopeSchema } from "./src/schemas/findings-envelope.ts";
 import { knowledgeSearchTool, readUrlTool, webSearchTool } from "./src/tools/langchain-tools.ts";
 
 const toolNames = [webSearchTool, readUrlTool, knowledgeSearchTool].map((tool) => tool.name).sort();
@@ -132,7 +144,9 @@ if (JSON.stringify(toolNames) !== JSON.stringify(expectedNames)) {
 
 const result = await critique({
   userRequest: "Compare naive RAG and sentence-window retrieval using current web evidence and explain when each approach should be used.",
-  findings: "RAG helps models answer questions better. Sentence-window retrieval is another retrieval approach.",
+  findings: FindingsEnvelopeSchema.parse({
+    markdown: "## Summary\n\nRAG helps models answer questions better. Sentence-window retrieval is another retrieval approach.",
+  }),
   plan: {
     goal: "Compare naive RAG and sentence-window retrieval.",
     searchQueries: ["naive RAG", "sentence-window retrieval"],
@@ -179,6 +193,11 @@ console.log(JSON.stringify({
 '
 
 echo "[validate] Running supervisor baseline validation..."
+if grep -q 'from "../agents/' "src/supervisor/supervisor-tools.ts"; then
+  echo "Supervisor tools must delegate through ACP instead of importing local role agents."
+  exit 1
+fi
+
 if ! grep -q "humanInTheLoopMiddleware" "src/supervisor/create-supervisor.ts"; then
   echo "Supervisor HITL middleware wiring is missing."
   exit 1
@@ -229,10 +248,13 @@ console.log(JSON.stringify({
 }, null, 2));
 '
 
+echo "[validate] Running Supervisor ACP delegation smoke..."
+bash scripts/smoke-rag-agent.sh
+
 echo "[validate] Running deterministic baseline workflow validation..."
 bash scripts/smoke-multi-agent-flow.sh
 
 echo "[validate] Running RAG smoke suite..."
 npm run rag:check
 
-echo "[validate] MCP blocks validations passed. ACP-specific checks will be added in later blocks."
+echo "[validate] MCP, ACP, and Supervisor ACP delegation validations passed."
