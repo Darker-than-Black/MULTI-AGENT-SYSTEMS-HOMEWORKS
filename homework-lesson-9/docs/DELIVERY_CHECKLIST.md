@@ -7,10 +7,10 @@ It is aligned with the TypeScript target architecture based on MCP for tools and
 
 A change set is not complete until:
 
-- `npm run validate` passes
-- architecture sync checks pass in git hooks
-- `docs/ARCHITECTURE.md` is updated when transport boundaries or contracts change
-- relevant manual review of validation output was done, not only command execution
+- [x] `npm run validate` passes
+- [x] architecture sync checks pass in git hooks
+- [x] `docs/ARCHITECTURE.md` is updated when transport boundaries or contracts change
+- [x] relevant manual review of validation output was done, not only command execution
 
 ## Current Status
 
@@ -20,39 +20,42 @@ A change set is not complete until:
 - [x] `Block 3. MCP Report Server` is implemented and validated
 - [x] `Block 4. ACP server` is implemented and validated
 - [x] `Block 7. Supervisor ACP delegation` is implemented and validated
+- [x] `Block 8. HITL + Report Save Flow` is implemented and validated
+- [x] `Block 9. Config + Runtime Hardening` is implemented and validated
+- [x] `Block 10. Validation + Final Hardening` is implemented and validated
 
 ## Block 0. Baseline Alignment
 
 Goal: remove `hw8` assumptions from docs and runtime expectations before protocol work starts.
 
-- [ ] Docs reference `homework-lesson-9`, not `homework-lesson-8`
-- [ ] The target architecture is documented as MCP + ACP, not local subagent-tools
-- [ ] Validation docs describe protocol-based runtime surfaces
-- [ ] Environment/config docs include protocol runtime settings
-- [ ] Runtime naming is aligned across docs, scripts, and package metadata
+- [x] Docs reference `homework-lesson-9`, not `homework-lesson-8`
+- [x] The target architecture is documented as MCP + ACP, not local subagent-tools
+- [x] Validation docs describe protocol-based runtime surfaces
+- [x] Environment/config docs include protocol runtime settings
+- [x] Runtime naming is aligned across docs, scripts, and package metadata
 
 Definition of done:
 
-- [ ] No documentation describes local-only supervisor-to-subagent wrappers as the target architecture
+- [x] No documentation describes local-only supervisor-to-subagent wrappers as the target architecture
 
 ## Block 1. Protocol Architecture Design
 
 Goal: formalize the runtime split between Supervisor, MCP servers, and ACP server.
 
-- [ ] SearchMCP responsibilities are documented
-- [ ] ReportMCP responsibilities are documented
-- [ ] ACP server responsibilities are documented
-- [ ] Supervisor responsibilities are documented separately from ACP agents
-- [ ] Runtime topology and communication graph are documented
-- [ ] Handoff contracts between Supervisor, ACP agents, and MCP servers are explicit
-- [ ] Planner input contract is fixed to `userRequest`
-- [ ] Researcher input contract is fixed to `userRequest + plan + critiqueFeedback?`
-- [ ] Critic input contract is fixed to `userRequest + findings + plan`
-- [ ] HITL ownership is fixed to local Supervisor only
+- [x] SearchMCP responsibilities are documented
+- [x] ReportMCP responsibilities are documented
+- [x] ACP server responsibilities are documented
+- [x] Supervisor responsibilities are documented separately from ACP agents
+- [x] Runtime topology and communication graph are documented
+- [x] Handoff contracts between Supervisor, ACP agents, and MCP servers are explicit
+- [x] Planner input contract is fixed to `userRequest`
+- [x] Researcher input contract is fixed to `userRequest + plan + critiqueFeedback?`
+- [x] Critic input contract is fixed to `userRequest + findings + plan`
+- [x] HITL ownership is fixed to local Supervisor only
 
 Definition of done:
 
-- [ ] `docs/ARCHITECTURE.md` is sufficient to implement the protocol topology without guessing
+- [x] `docs/ARCHITECTURE.md` is sufficient to implement the protocol topology without guessing
 
 ## Block 2. MCP Search Server
 
@@ -178,42 +181,42 @@ Definition of done:
 
 Goal: keep human approval local while persistence moves to ReportMCP.
 
-- [ ] `save_report` is still gated by HITL middleware
-- [ ] A checkpointer is configured for interrupt/resume behavior
-- [ ] `thread_id` is stable across approve/edit/reject
-- [ ] CLI surfaces pending save actions clearly
-- [ ] `approve` resumes into ReportMCP persistence
-- [ ] `edit` returns to Supervisor flow on the same thread
-- [ ] `reject` aborts persistence cleanly
-- [ ] ReportMCP does not contain approval logic
+- [x] `save_report` is still gated by HITL middleware
+- [x] A checkpointer is configured for interrupt/resume behavior
+- [x] `thread_id` is stable across approve/edit/reject
+- [x] CLI surfaces pending save actions clearly
+- [x] `approve` resumes into ReportMCP persistence
+- [x] `edit` returns to Supervisor flow on the same thread
+- [x] `reject` aborts persistence cleanly
+- [x] ReportMCP does not contain approval logic
 
 Definition of done:
 
-- [ ] No report is persisted without explicit approval
+- [x] No report is persisted without explicit approval
 
 ## Block 9. Config + Runtime Hardening
 
 Goal: centralize protocol configuration and keep boundaries explicit.
 
-- [ ] `src/config/env.ts` includes MCP/ACP runtime settings
-- [ ] `src/config/prompts.ts` remains the single prompt source
-- [ ] `src/config/agent-policy.ts` remains the single workflow policy source
-- [ ] Protocol endpoints are not hardcoded ad hoc across modules
-- [ ] Logging and tracing can distinguish Supervisor, ACP, and MCP activity
+- [x] `src/config/env.ts` includes MCP/ACP runtime settings
+- [x] `src/config/prompts.ts` remains the single prompt source
+- [x] `src/config/agent-policy.ts` remains the single workflow policy source
+- [x] Protocol endpoints are not hardcoded ad hoc across modules
+- [x] Logging and tracing can distinguish Supervisor, ACP, and MCP activity
 
 Definition of done:
 
-- [ ] Runtime configuration can be changed without hidden coupling across transport layers
+- [x] Runtime configuration can be changed without hidden coupling across transport layers
 
 ## Block 10. Validation + Final Hardening
 
 Goal: ensure the protocol-based architecture is testable end to end.
 
-- [ ] `npm run validate` passes after MCP/ACP migration
-- [ ] Validation covers ingestion
-- [ ] Validation covers retrieval
-- [ ] Validation covers SearchMCP tool/resource discovery
-- [ ] Validation covers Block 2 local-agent integration through SearchMCP
+- [x] `npm run validate` passes after MCP/ACP migration
+- [x] Validation covers ingestion
+- [x] Validation covers retrieval
+- [x] Validation covers SearchMCP tool/resource discovery
+- [x] Validation covers Block 2 local-agent integration through SearchMCP
 - [x] Validation covers GitHubMCP tool/resource discovery
 - [x] Validation covers local-agent integration through GitHubMCP
 - [x] Validation covers ReportMCP tool/resource discovery
@@ -221,26 +224,26 @@ Goal: ensure the protocol-based architecture is testable end to end.
 - [x] Validation covers Planner structured output via ACP
 - [x] Validation covers Critic structured output via ACP
 - [x] Validation covers Supervisor orchestration through ACP
-- [ ] Validation covers HITL interrupt/resume with ReportMCP save flow
+- [x] Validation covers HITL interrupt/resume with ReportMCP save flow
 
 Definition of done:
 
-- [ ] The validation suite covers the critical protocol-based runtime path
+- [x] The validation suite covers the critical protocol-based runtime path
 
 ## Explicit Review Checklist
 
 During implementation review, verify these items explicitly:
 
-- [ ] Supervisor orchestration is not mixed with retrieval implementation
-- [ ] MCP transport is not mixed with tool business logic
-- [ ] ACP transport is not mixed with agent role logic
-- [ ] Planner, Researcher, and Critic remain separate role-specific agents
-- [ ] Structured outputs live in `src/schemas/*`
-- [ ] `FindingsEnvelope` is used as the Researcher -> Critic handoff
-- [ ] `knowledge_search` still delegates to the RAG layer
-- [ ] SearchMCP is shared across all ACP agents
-- [ ] ReportMCP is used only for persistence concerns
-- [ ] CLI/HITL logic remains in `src/main.ts`
+- [x] Supervisor orchestration is not mixed with retrieval implementation
+- [x] MCP transport is not mixed with tool business logic
+- [x] ACP transport is not mixed with agent role logic
+- [x] Planner, Researcher, and Critic remain separate role-specific agents
+- [x] Structured outputs live in `src/schemas/*`
+- [x] `FindingsEnvelope` is used as the Researcher -> Critic handoff
+- [x] `knowledge_search` still delegates to the RAG layer
+- [x] SearchMCP is shared across all ACP agents
+- [x] ReportMCP is used only for persistence concerns
+- [x] CLI/HITL logic remains in `src/main.ts`
 - [x] Report persistence is gated by explicit approval
 
 ## Maintenance Rule

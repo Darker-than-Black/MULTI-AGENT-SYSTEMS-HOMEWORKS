@@ -10,17 +10,80 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
-  app:
+  search-mcp:
     build:
       context: .
       dockerfile: Dockerfile.app
-    container_name: homework-lesson-9-app
+    container_name: homework-lesson-9-search-mcp
     depends_on:
       - qdrant
     env_file:
       - .env
     environment:
       QDRANT_URL: http://qdrant:6333
+      SEARCH_MCP_HOST: 0.0.0.0
+    ports:
+      - "8901:8901"
+    command: npm run mcp:search
+
+  report-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: homework-lesson-9-report-mcp
+    env_file:
+      - .env
+    environment:
+      REPORT_MCP_HOST: 0.0.0.0
+    ports:
+      - "8902:8902"
+    command: npm run mcp:report
+
+  github-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: homework-lesson-9-github-mcp
+    env_file:
+      - .env
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_MCP_HOST: 0.0.0.0
+    ports:
+      - "8904:8904"
+    command: npm run mcp:github
+
+  acp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: homework-lesson-9-acp-server
+    depends_on:
+      - search-mcp
+      - github-mcp
+    env_file:
+      - .env
+    environment:
+      ACP_HOST: 0.0.0.0
+      SEARCH_MCP_URL: http://search-mcp:8901
+      GITHUB_MCP_URL: http://github-mcp:8904
+    ports:
+      - "8903:8903"
+    command: npm run acp:server
+
+  supervisor-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: homework-lesson-9-supervisor-cli
+    depends_on:
+      - acp-server
+      - report-mcp
+    env_file:
+      - .env
+    environment:
+      ACP_URL: http://acp-server:8903
+      REPORT_MCP_URL: http://report-mcp:8902
     working_dir: /app
     stdin_open: true
     tty: true

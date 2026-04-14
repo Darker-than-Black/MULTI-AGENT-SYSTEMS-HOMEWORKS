@@ -12,6 +12,7 @@ export async function runAcpAgent(
   agentName: AcpAgentName,
   input: AcpRunRequest["input"],
 ): Promise<AcpRunResponse> {
+  console.log(`  🌐 [ACP Client] Delegating to remote agent: ${agentName}...`);
   let response: Response;
   try {
     response = await fetch(`${ACP_URL}/runs`, {

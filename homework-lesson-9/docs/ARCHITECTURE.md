@@ -9,7 +9,7 @@ src/
 ├── main.ts
 ├── supervisor/
 │   ├── create-supervisor.ts
-│   └── acp-delegation-tools.ts
+│   └── supervisor-tools.ts
 ├── acp/
 │   ├── server.ts
 │   ├── client.ts
@@ -59,7 +59,7 @@ File names may vary slightly, but the boundaries below are mandatory.
 - `src/supervisor/*`
   - Owns orchestration only.
   - Coordinates `Plan -> Research -> Critique -> Save`.
-  - Owns ACP client wrappers exposed as Supervisor tools.
+  - Owns ACP client wrappers exposed as Supervisor tools in `supervisor-tools.ts`.
   - May assemble HITL middleware and checkpointing.
   - Must not contain low-level MCP server/client setup details beyond what is needed for delegation.
   - Must not contain retrieval business logic.

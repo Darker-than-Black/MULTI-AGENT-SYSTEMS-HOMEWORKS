@@ -1,10 +1,10 @@
 import { tool } from "langchain";
 import { z } from "zod";
 import { runAcpAgent } from "../acp/client";
+import { saveReportViaMcp } from "../mcp/report-client";
 import { CritiqueResultSchema } from "../schemas/critique-result";
 import { FindingsEnvelopeSchema } from "../schemas/findings-envelope";
 import { ResearchPlanSchema } from "../schemas/research-plan";
-import { writeReportTool } from "../tools/langchain-tools";
 import type { ProgressLogger } from "../utils/logger";
 
 let progressLogger: ProgressLogger | undefined;
@@ -143,11 +143,34 @@ export const critiqueFindingsTool = tool(
   },
 );
 
+export const saveReportTool = tool(
+  async ({ filename, content }) => {
+    emitSupervisorProgress("supervisor", "start", "Save Report started", filename);
+    try {
+      const result = await saveReportViaMcp({ filename, content });
+      emitSupervisorProgress("supervisor", "success", "Save Report finished", result);
+      return result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown report error.";
+      emitSupervisorProgress("supervisor", "error", "Save Report failed", message);
+      throw error;
+    }
+  },
+  {
+    name: "write_report",
+    description: "Save a markdown report to the output directory. Use when the user asks to save or export the result.",
+    schema: z.object({
+      filename: z.string().trim().min(1).max(255).describe("Report file name (markdown)."),
+      content: z.string().trim().min(1).describe("Markdown report content."),
+    }),
+  },
+);
+
 export const supervisorTools = [
   planResearchTool,
   runResearchTool,
   critiqueFindingsTool,
-  writeReportTool,
+  saveReportTool,
 ];
 
 export function parsePlanToolResult(raw: string) {
