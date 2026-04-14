@@ -1,180 +1,146 @@
-# Delivery Checklist (Implementation Plan + Definition of Done)
+# Delivery Checklist (Lesson 10 Test Plan + Definition of Done)
 
-This checklist reflects the agreed implementation plan for `homework-lesson-8`.
-It is aligned with the current TypeScript target architecture and the single public validation entrypoint: `npm run validate`.
+This checklist tracks the homework-lesson-10 testing requirements for the TypeScript multi-agent system: golden dataset coverage, component-level evals, tool correctness, and end-to-end regression testing through `deepeval test run tests/`.
 
 ## Shared Gates
 
 A change set is not complete until:
 
-- `npm run validate` passes
-- architecture sync checks pass in git hooks
-- `docs/ARCHITECTURE.md` is updated when module boundaries or contracts change
-- relevant manual review of validation output was done, not only command execution
+- `deepeval test run tests/` passes
+- the golden dataset was manually reviewed, not only generated
+- thresholds were set to a realistic baseline instead of being overfit
+- failing cases were reviewed manually, not only by metrics
+- the test harness can invoke the TypeScript agents through `npm run batch`
 
-## Block 0. Tech Debt + Alignment
+## Block 0. Test Harness Alignment
 
-Goal: stabilize the project baseline before multi-agent work starts.
+Goal: keep the Python test layer and the TypeScript batch bridge in sync.
 
-- [ ] Automation scripts are aligned with `homework-lesson-8` and do not point to previous lessons.
-- [ ] Validation surface is minimized to one public npm command: `npm run validate`.
-- [ ] Unused or duplicated validation scripts are removed.
-- [ ] `package.json` scripts reflect the current validation model.
-- [ ] `README`-level TypeScript draft exists under `docs/`.
-- [ ] `docs/ARCHITECTURE.md` reflects the current target TypeScript architecture.
-- [ ] `docs/DELIVERY_CHECKLIST.md` reflects the current implementation plan.
-
-Definition of done:
-
-- [ ] No broken references to removed validation scripts remain.
-- [ ] `npm run validate` passes on the current baseline.
-
-## Block 1. Target Architecture Design
-
-Goal: formalize the TypeScript module layout and responsibilities.
-
-- [ ] The target module structure is fixed in documentation.
-- [ ] Supervisor responsibilities are separated from agent role responsibilities.
-- [ ] Planner, Researcher, and Critic ownership boundaries are documented.
-- [ ] The location of `schemas`, `prompts`, `tools`, `rag`, and `config` is fixed.
-- [ ] The expected handoff contracts between agents are described.
+- [ ] `src/main-batch.ts` supports the test modes required by the suite.
+- [ ] `tests/conftest.py` provides a stable subprocess runner and shared fixtures.
+- [ ] `requirements.txt` includes the DeepEval test dependencies.
+- [ ] `package.json` exposes the batch entrypoint used by the tests.
+- [ ] `tests/` contains the expected component, tool, and e2e test files.
 
 Definition of done:
 
-- [ ] `docs/ARCHITECTURE.md` is sufficient to implement the agreed file structure without guessing.
+- [ ] The Python tests can invoke the TypeScript runtime without manual setup steps beyond the documented environment.
 
-## Block 2. Structured Output Layer
+## Block 1. Golden Dataset
 
-Goal: define stable structured contracts for planning and critique.
+Goal: create a regression dataset that covers normal, ambiguous, and unsafe inputs.
 
-- [ ] A `ResearchPlan` schema is defined in `src/schemas/*`.
-- [ ] A `CritiqueResult` schema is defined in `src/schemas/*`.
-- [ ] Schema naming follows TypeScript conventions while preserving the required semantics.
-- [ ] Findings format passed from Researcher to Critic is explicitly defined.
-- [ ] Structured outputs are designed for LangChain JS `responseFormat` usage.
-
-Definition of done:
-
-- [ ] Planner and Critic structured outputs can be validated independently of orchestration.
-
-## Block 3. Planner Agent
-
-Goal: implement the planning role as a dedicated agent.
-
-- [ ] Planner agent is created via LangChain `createAgent`.
-- [ ] Planner prompt is role-specific and not mixed with other agents.
-- [ ] Planner can use `web_search` and `knowledge_search`.
-- [ ] Planner returns `ResearchPlan` as structured output.
-- [ ] Supervisor-facing `plan(...)` wrapper contract is defined.
+- [ ] `tests/golden_dataset.json` contains 15-20 examples.
+- [ ] The dataset includes `happy_path`, `edge_case`, and `failure_case` entries.
+- [ ] Happy-path examples cover typical research questions.
+- [ ] Edge cases cover narrow, broad, multilingual, or otherwise ambiguous queries.
+- [ ] Failure cases cover off-domain, nonsensical, or prohibited requests.
+- [ ] Each example includes the fields needed by the test suite, including the expected output and tool expectations where relevant.
+- [ ] The dataset was manually reviewed and cleaned up after generation.
 
 Definition of done:
 
-- [ ] A user request can be decomposed into a structured plan suitable for downstream research.
+- [ ] The golden dataset can be used for repeatable regression evaluation without requiring edits during test execution.
 
-## Block 4. Research Agent Refactor
+## Block 2. Planner Component Tests
 
-Goal: convert the current single-agent runtime into the Researcher role.
+Goal: verify that the Planner produces a structured and useful plan.
 
-- [ ] Existing evidence-first behavior is preserved.
-- [ ] Research Agent is isolated as a dedicated subagent.
-- [ ] Research Agent uses `web_search`, `read_url`, and `knowledge_search`.
-- [ ] Research Agent can consume the initial plan from Planner.
-- [ ] Research Agent can consume revision requests from Critic.
-- [ ] RAG integration remains delegated through tool adapters.
-
-Definition of done:
-
-- [ ] Research findings can be generated from both the first-pass plan and critic revision feedback.
-
-## Block 5. Critic Agent
-
-Goal: add an evaluator that independently validates research quality.
-
-- [ ] Critic agent is created via LangChain `createAgent`.
-- [ ] Critic prompt explicitly evaluates freshness, completeness, and structure.
-- [ ] Critic can use the same evidence tools as Research Agent.
-- [ ] Critic receives the original user request together with findings.
-- [ ] Critic returns `CritiqueResult` as structured output.
-- [ ] Verdict rules for `APPROVE` vs `REVISE` are explicit.
+- [ ] Planner output contains the required structured fields.
+- [ ] The plan includes specific search queries, not vague topic labels.
+- [ ] `sourcesToCheck` contains valid sources for the query.
+- [ ] `outputFormat` matches the user request and downstream workflow.
+- [ ] `test_planner.py` includes a custom GEval metric for plan quality.
+- [ ] Planner behavior is checked for a multilingual query.
+- [ ] Planner behavior is checked for an off-domain request.
 
 Definition of done:
 
-- [ ] Critic can issue concrete revision requests instead of generic comments.
+- [ ] The Planner can turn a user request into a structured plan that downstream agents can consume without guessing.
 
-## Block 6. Supervisor Orchestration
+## Block 3. Researcher Component Tests
 
-Goal: implement the multi-agent control loop.
+Goal: verify that the Researcher stays grounded in evidence.
 
-- [ ] Supervisor agent is created as the orchestration layer.
-- [ ] Supervisor always starts with Planner.
-- [ ] Supervisor passes plan output into Researcher.
-- [ ] Supervisor passes findings plus original request into Critic.
-- [ ] Supervisor handles `REVISE` by re-invoking Researcher with critic feedback.
-- [ ] Supervisor enforces the maximum number of revision rounds.
-- [ ] Supervisor prepares the final markdown report when critique is approved.
+- [ ] Researcher findings are evaluated against retrieval context.
+- [ ] Findings include source citations or named references.
+- [ ] Researcher outputs are substantive enough to be useful, not a one-line summary.
+- [ ] `test_researcher.py` includes a groundedness metric.
+- [ ] Researcher behavior is checked for an out-of-domain query.
 
 Definition of done:
 
-- [ ] The runtime supports at least one full cycle of `Plan -> Research -> Critique -> Research -> Critique -> Report`.
+- [ ] Research findings are supported by retrievable evidence and degrade gracefully when the topic is out of scope.
 
-## Block 7. HITL Save Flow
+## Block 4. Critic Component Tests
 
-Goal: gate persistence behind explicit user approval.
+Goal: verify that the Critic produces actionable review feedback.
 
-- [ ] `write_report` is protected with HITL middleware.
-- [ ] A checkpointer is configured for interrupt/resume behavior.
-- [ ] `thread_id` is used consistently across the interaction.
-- [ ] CLI surfaces pending save actions clearly.
-- [ ] CLI supports `approve`, `edit`, and `reject`.
-- [ ] `edit` re-enters the Supervisor flow rather than mutating files outside the agent loop.
-
-Definition of done:
-
-- [ ] The report is not saved until the user explicitly approves it.
-
-## Block 8. Prompts + Config Hardening
-
-Goal: centralize and harden prompts and runtime configuration.
-
-- [ ] Supervisor, Planner, Researcher, and Critic prompts are centralized.
-- [ ] Prompt responsibilities are not duplicated inline across multiple modules.
-- [ ] `src/config/env.ts` remains the single environment entrypoint.
-- [ ] Any new multi-agent runtime config is documented in code and docs.
-- [ ] Prompt wording is aligned with tool availability and orchestration rules.
+- [ ] Critic output contains the required structured fields.
+- [ ] `verdict` is consistent with the quality of the findings.
+- [ ] `APPROVE` implies no revision requests.
+- [ ] `REVISE` includes at least one actionable revision request.
+- [ ] `test_critic.py` includes a custom GEval metric for critique quality.
+- [ ] `test_critic.py` includes a second custom GEval metric for revision-request actionability.
 
 Definition of done:
 
-- [ ] Prompts and config can be updated independently from the orchestration code without hidden coupling.
+- [ ] The Critic can distinguish acceptable findings from ones that need targeted follow-up work.
 
-## Block 9. Validation + Final Hardening
+## Block 5. Tool Correctness
 
-Goal: ensure the multi-agent implementation is testable and reviewable.
+Goal: verify that each role uses the tools expected by the workflow.
 
-- [ ] `npm run validate` still passes after multi-agent changes.
-- [ ] Validation covers ingestion.
-- [ ] Validation covers retrieval.
-- [ ] Validation covers agent integration with `knowledge_search`.
-- [ ] Validation is extended to cover Supervisor orchestration.
-- [ ] Validation is extended to cover HITL interrupt/resume behavior.
-- [ ] Validation output is manually reviewed.
+- [ ] Planner tool usage is checked for search-oriented exploration.
+- [ ] Researcher tool usage matches the requested sources from the plan.
+- [ ] Supervisor tool usage includes `write_report` after approval.
+- [ ] `test_tools.py` contains at least 3 tool-correctness test cases.
+- [ ] Tool checks use `ToolCorrectnessMetric` rather than only string assertions.
 
 Definition of done:
 
-- [ ] The validation suite covers the critical runtime path for the current implementation stage.
+- [ ] The role-to-tool mapping is validated directly by the test suite.
+
+## Block 6. End-to-End Regression
+
+Goal: validate the full Supervisor -> Planner -> Researcher -> Critic pipeline on the golden dataset.
+
+- [ ] `test_e2e.py` runs the full pipeline on happy-path and edge-case examples.
+- [ ] `test_e2e.py` includes at least two metrics for the full answer.
+- [ ] Failure cases are evaluated separately and must refuse or score low on relevancy.
+- [ ] The e2e suite records results for regression review.
+- [ ] The output is checked manually when the score changes materially.
+
+Definition of done:
+
+- [ ] The full pipeline is covered by regression tests that can be rerun on the same dataset.
+
+## Block 7. Thresholds + Hardening
+
+Goal: keep the evaluation suite useful as the implementation evolves.
+
+- [ ] Thresholds are set to a realistic baseline, not an artificially high target.
+- [ ] Threshold changes are documented when the system improves.
+- [ ] Metric choices match the behavior being evaluated.
+- [ ] The suite remains green on a clean run of `deepeval test run tests/`.
+- [ ] Any skipped tests have an explicit reason and do not hide real regressions.
+
+Definition of done:
+
+- [ ] The test suite is stable enough to serve as a regression gate for the lesson-10 submission.
 
 ## Explicit Review Checklist
 
 During implementation review, verify these items explicitly:
 
-- [ ] Supervisor orchestration is not mixed with low-level retrieval logic.
-- [ ] Planner, Researcher, and Critic are separate role-specific agents.
-- [ ] Structured outputs live in `src/schemas/*`.
-- [ ] `knowledge_search` delegates to the RAG layer.
-- [ ] `src/tools/*` remains decoupled from agent orchestration concerns.
-- [ ] `src/rag/*` remains decoupled from `src/supervisor/*` and `src/agents/*`.
-- [ ] CLI/HITL logic lives in `src/main.ts` and not inside the retrieval layer.
-- [ ] Report persistence is gated by explicit approval.
+- [ ] The golden dataset has the expected category mix.
+- [ ] Planner, Researcher, and Critic are tested independently.
+- [ ] Researcher findings are grounded in retrieved evidence.
+- [ ] Critic revision requests are concrete enough to act on.
+- [ ] Tool-correctness checks match the intended role behavior.
+- [ ] Failure cases do not produce confident answers.
+- [ ] The final e2e run was reviewed manually, not only accepted by score.
 
 ## Maintenance Rule
 
-If the implementation plan changes materially, update this document in the same commit as the architectural or validation changes
+If the test strategy, dataset shape, metric set, or acceptance thresholds change materially, update this document in the same commit as the test changes.

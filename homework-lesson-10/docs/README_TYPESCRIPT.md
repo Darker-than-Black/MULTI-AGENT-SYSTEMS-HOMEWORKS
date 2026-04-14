@@ -1,219 +1,60 @@
-# Домашнє завдання: мультиагентна дослідницька система (TypeScript adaptation)
+# Домашнє завдання: тестування мультиагентної системи (TypeScript adaptation)
 
-Цей документ є TypeScript-адаптацією поточного `README.md`.
-Кореневий `README.md` не змінюється: тут зібрано чернетку опису під реальний стек проєкту `homework-lesson-8`.
+Цей документ є TypeScript-адаптацією `README.md` для `homework-lesson-10`.  
+Кореневий `README.md` описує завдання в загальному вигляді. Тут зібрано деталі, специфічні для стеку `homework-lesson-10` (TypeScript + Python test layer).
 
 ---
 
 ## Мета
 
-Розширити поточного Research Agent з попереднього домашнього завдання до **мультиагентної системи** з Supervisor, який координує трьох спеціалізованих субагентів за патерном:
+Написати автоматизовані тести для мультиагентної системи з `homework-lesson-8`, використовуючи **DeepEval** та Python-тест-шар, що взаємодіє з TypeScript-агентами через subprocess.
 
-`Plan -> Research -> Critique`
+```text
+Python (deepeval test run)
+  |
+  v
+tests/conftest.py  →  npm run batch  →  src/main-batch.ts
+                                            |
+                                        TypeScript agents
+                                        (Planner / Researcher / Critic / Supervisor)
+```
 
 ---
 
-## Що змінюється порівняно з попереднім станом
+## Що змінюється порівняно з homework-lesson-8
 
-| Було | Стає |
-| - | - |
-| Один LangChain agent | Supervisor + 3 субагенти |
-| Один агент виконує весь flow | Planner планує, Researcher досліджує, Critic перевіряє |
-| Один прохід | Ітеративний цикл з можливістю revision |
-| Звичайний запис звіту | HITL-підтвердження перед `write_report` |
-| Текстовий вивід | Structured output для Planner і Critic |
+| Було (homework-lesson-8)           | Стає (homework-lesson-10)                        |
+|------------------------------------|--------------------------------------------------|
+| Мультиагентна система без тестів   | Та сама система + покриття тестами               |
+| Перевірка якості вручну            | Автоматизовані evals з метриками 0–1             |
+| Немає golden dataset               | 15 golden examples для regression testing        |
+| Немає CI-ready тестів              | `deepeval test run tests/` запускає всі тести    |
+| Лише інтерактивний CLI (`npm run dev`) | Додано неінтерактивний batch-режим (`npm run batch`) |
 
 ---
 
 ## Поточний стек
 
-- Мова: `TypeScript`
-- Runtime: `Node.js`
-- Agent framework: `langchain` JS
-- Structured output: `zod`
-- Model: `ChatOpenAI`
-- Local knowledge layer: `Qdrant + BM25 + hybrid retrieval + optional Cohere rerank`
-- CLI: `src/main.ts`
-- Ingestion entrypoint: `src/rag/ingest.ts`
+| Шар         | Технологія                                                |
+|-------------|-----------------------------------------------------------|
+| Мова агентів | `TypeScript` / `Node.js`                                 |
+| Agent framework | `langchain` JS                                       |
+| Structured output | `zod`                                              |
+| Model | `ChatOpenAI`                                                   |
+| Local knowledge | `Qdrant + BM25 + hybrid retrieval + Cohere rerank`   |
+| Тест-фреймворк | `DeepEval` (Python)                                 |
+| Тест-runner | `pytest` + `deepeval test run`                           |
+| TS↔Python bridge | `src/main-batch.ts` (stdin/stdout JSON)           |
 
 ---
 
-## Цільова архітектура
+## Нова TypeScript-структура проєкту
 
 ```text
-User (CLI / REPL)
-  |
-  v
-Supervisor Agent
-  |
-  +- 1. plan(request)      -> Planner Agent      -> structured ResearchPlan
-  |
-  +- 2. research(plan)     -> Research Agent     -> findings
-  |
-  +- 3. critique(findings) -> Critic Agent       -> structured CritiqueResult
-  |      |
-  |      +- verdict=APPROVE -> go to report writing
-  |      \- verdict=REVISE  -> return to research with feedback
-  |
-  \- 4. write_report(...)   -> HITL gated
-```
-
-Ключовий патерн: **evaluator-optimizer**.  
-Supervisor керує циклом, Critic валідовує результат, а Researcher доопрацьовує його за потреби.
-
----
-
-## Що потрібно реалізувати
-
-### 1. Planner Agent
-
-Planner декомпозує user request у структурований план дослідження.
-
-Для TypeScript-версії:
-
-- використовується `createAgent(...)`
-- structured output задається через `responseFormat`
-- схема описується через `zod`
-
-Приклад shape:
-
-```ts
-import { z } from "zod";
-
-export const ResearchPlanSchema = z.object({
-  goal: z.string(),
-  searchQueries: z.array(z.string()),
-  sourcesToCheck: z.array(z.enum(["knowledge_base", "web"])),
-  outputFormat: z.string(),
-});
-```
-
-Planner:
-
-- може використовувати `web_search`
-- може використовувати `knowledge_search`
-- повертає `structuredResponse`
-
-Supervisor має викликати Planner першим кроком.
-
-### 2. Research Agent
-
-Research Agent перевикористовує існуючий evidence-first flow.
-
-Інструменти:
-
-- `web_search`
-- `read_url`
-- `knowledge_search`
-
-Research Agent:
-
-- слідує плану Planner
-- комбінує local knowledge base і web evidence
-- повертає findings у стабільному форматі, який можна передати Critic
-
-RAG layer з `src/rag/*` перевикористовується без перенесення логіки в agent layer.
-
-### 3. Critic Agent
-
-Critic виконує незалежну перевірку findings.
-
-Він має перевіряти:
-
-1. `freshness`
-2. `completeness`
-3. `structure`
-
-Structured output для Critic:
-
-```ts
-import { z } from "zod";
-
-export const CritiqueResultSchema = z.object({
-  verdict: z.enum(["APPROVE", "REVISE"]),
-  isFresh: z.boolean(),
-  isComplete: z.boolean(),
-  isWellStructured: z.boolean(),
-  strengths: z.array(z.string()),
-  gaps: z.array(z.string()),
-  revisionRequests: z.array(z.string()),
-});
-```
-
-Critic використовує ті самі evidence tools, що й Research Agent:
-
-- `web_search`
-- `read_url`
-- `knowledge_search`
-
-Critic не просто коментує текст, а проводить незалежну верифікацію через ті ж джерела.
-
-### 4. Supervisor Agent
-
-Supervisor координує цикл:
-
-1. виклик `plan`
-2. виклик `research`
-3. виклик `critique`
-4. якщо `REVISE` -> ще один виклик `research` з feedback
-5. якщо `APPROVE` -> формування фінального markdown report
-6. виклик `write_report`
-
-Обмеження:
-
-- максимум 2 раунди доопрацювання після critic feedback
-
-Supervisor не повинен містити retrieval logic. Його роль: orchestration.
-
-### 5. HITL для `write_report`
-
-Операція запису має бути захищена Human-in-the-Loop middleware.
-
-У JS/TS-стеку це виглядає через:
-
-- `humanInTheLoopMiddleware(...)`
-- `MemorySaver`
-- `Command({ resume: ... })`
-
-Очікуваний flow:
-
-- Supervisor готує фінальний report
-- при спробі викликати `write_report` виникає interrupt
-- CLI показує preview звіту
-- користувач обирає:
-  - `approve`
-  - `edit`
-  - `reject`
-- після `edit` Supervisor отримує feedback і генерує нову версію звіту
-
-### 6. Prompts та config
-
-Prompts усіх ролей мають жити окремо від orchestration logic.
-
-Рекомендовано винести:
-
-- prompt Supervisor
-- prompt Planner
-- prompt Researcher
-- prompt Critic
-
-у `src/config/prompts.ts`.
-
-Конфігурація середовища залишається в:
-
-- `src/config/env.ts`
-- `.env`
-
----
-
-## Рекомендована TS-структура проєкту
-
-Нижче наведено цільову структуру саме для TypeScript-реалізації:
-
-```text
-homework-lesson-8/
+homework-lesson-10/
 ├── src/
-│   ├── main.ts
+│   ├── main.ts                  # Інтерактивний CLI (незмінений з lesson-8)
+│   ├── main-batch.ts            # НОВИЙ: неінтерактивний batch entrypoint для тестів
 │   ├── supervisor/
 │   │   ├── create-supervisor.ts
 │   │   └── supervisor-tools.ts
@@ -239,58 +80,246 @@ homework-lesson-8/
 │   │   ├── env.ts
 │   │   └── prompts.ts
 │   └── utils/
-├── docs/
+├── tests/                       # НОВИЙ: Python тест-шар
+│   ├── conftest.py              # Shared fixtures, subprocess runner, session cache
+│   ├── golden_dataset.json      # 15 golden examples
+│   ├── test_planner.py          # Planner agent tests
+│   ├── test_researcher.py       # Researcher agent tests (groundedness)
+│   ├── test_critic.py           # Critic agent tests + custom GEval metric
+│   ├── test_tools.py            # Tool correctness tests
+│   └── test_e2e.py              # End-to-end evaluation on golden dataset
 ├── data/
-├── output/
-└── package.json
+├── docs/
+├── requirements.txt             # НОВИЙ: Python залежності
+├── package.json
+└── .env.example
 ```
-
-Це не жорсткий контракт по іменах файлів, а рекомендований напрямок для структурування відповідальностей.
 
 ---
 
-## Важлива адаптація з Python на TypeScript
+## src/main-batch.ts — TypeScript↔Python bridge
 
-У Python-версії вимоги описані через:
+`main-batch.ts` — це неінтерактивний entrypoint, спеціально написаний для тестів.  
+Python-процес запускає `npm run batch`, передає JSON в `stdin` і читає JSON з `stdout`.
 
-- `Pydantic`
-- `response_format`
-- `HumanInTheLoopMiddleware`
-- `InMemorySaver`
-- `main.py`
+### Підтримувані режими
 
-У TypeScript-версії відповідники такі:
+| `mode`             | Що виконується                                  | Що повертається                                              |
+|--------------------|-------------------------------------------------|--------------------------------------------------------------|
+| `"full"`           | Повний цикл Supervisor (auto-approve write_report) | `{ finalAnswer, plan, critique, toolExecutions, wroteReport }` |
+| `"plan"`           | `planResearch(userRequest)`                     | `{ plan: ResearchPlan }`                                     |
+| `"research"`       | `research({ userRequest, plan, critiqueFeedback? })` | `{ findings: string }`                                  |
+| `"critique"`       | `critique({ userRequest, findings })`           | `{ critique: CritiqueResult }`                               |
+| `"knowledge_search"` | `knowledgeSearch({ query })`                 | `{ results: string }`                                        |
 
-- `Pydantic` -> `zod`
-- `response_format` -> `responseFormat`
-- `structured_response` -> `structuredResponse`
-- `HumanInTheLoopMiddleware` -> `humanInTheLoopMiddleware(...)`
-- `InMemorySaver` -> `MemorySaver`
-- `main.py` -> `src/main.ts`
+### Формат запиту / відповіді
 
-Тобто логіка завдання зберігається, але API та організація коду мають відповідати JS/TS стеку.
+```bash
+# Приклад: запустити Planner
+echo '{"mode":"plan","userRequest":"Compare naive RAG vs sentence-window retrieval"}' \
+  | npm run batch
+```
+
+```json
+// Успішна відповідь
+{ "success": true, "mode": "plan", "plan": { "goal": "...", "searchQueries": [...], ... } }
+
+// Помилка
+{ "success": false, "error": "mode=plan requires userRequest." }
+```
+
+### Auto-approve HITL у режимі "full"
+
+У batch-режимі HITL interrupt для `write_report` підтверджується автоматично:
+
+```typescript
+let result = await superviseResearchWithOptions(query, { threadId, maxIterations });
+if (result.status === "interrupted") {
+  result = await resumeSupervisorWithOptions({ type: "approve" }, { threadId, maxIterations });
+}
+```
+
+---
+
+## Python тест-шар
+
+### Встановлення залежностей
+
+```bash
+pip install -r requirements.txt
+```
+
+`requirements.txt`:
+```
+deepeval>=2.5.0
+pytest>=8.3.0
+python-dotenv>=1.1.0
+httpx>=0.28.0
+```
+
+### conftest.py — ключові утиліти
+
+| Функція / fixture        | Призначення                                                  |
+|--------------------------|--------------------------------------------------------------|
+| `run_agent(mode, **kw)`  | Запускає `npm run batch` через subprocess; на помилку — `pytest.skip` |
+| `agent_cache` (session)  | Кеш результатів агента на рівні сесії; уникає повторних LLM-викликів |
+| `cached_run(cache, ...)`  | Запускає агента тільки якщо ключ відсутній у кеші           |
+| `load_golden_dataset()`  | Читає `tests/golden_dataset.json`                            |
+| `parse_tool_calls(traces)` | Конвертує `ToolExecutionTrace[]` у `deepeval.test_case.ToolCall[]` |
+
+Session fixtures (для повторного використання між тест-файлами):
+- `planner_rag_result` — план для RAG-запиту
+- `planner_multilingual_result` — план для україномовного запиту
+- `planner_off_domain_result` — план для off-domain запиту
+- `researcher_rag_result` — findings для RAG-теми
+- `critique_approve_result` — критика якісних findings
+- `critique_revise_result` — критика поверхневих findings
+
+---
+
+## Метрики та тести
+
+### test_planner.py
+
+- **`plan_quality_metric`** (GEval) — перевіряє специфічність запитів, валідні джерела, відповідність меті
+- Структурні перевірки: `len(searchQueries) >= 2`, валідні `sourcesToCheck`, наявність усіх полів
+
+### test_researcher.py
+
+- **`groundedness_metric`** (GEval) — кожне фактичне твердження має бути підкріплене `retrieval_context`
+- Структурна перевірка: findings мають містити джерела (URL або `Source:`)
+
+### test_critic.py
+
+- **`critique_quality_metric`** (GEval) — специфічність критики, консистентність вердикту
+- **`critique_actionability_metric`** (GEval) — **кастомна бізнес-логічна метрика**: кожен `revisionRequest` має бути конкретним і виконуваним Researcher-агентом (не "покращити якість", а "знайти X у джерелі Y")
+- Структурні перевірки: усі обов'язкові поля, `APPROVE → revisionRequests == []`
+
+### test_tools.py
+
+Використовує `ToolCorrectnessMetric` від DeepEval. Мінімум 3 тест-кейси:
+1. Planner викликає пошуковий інструмент
+2. Researcher використовує інструменти відповідно до `sourcesToCheck` в плані
+3. Supervisor викликає `write_report` (режим `"full"`, auto-approve)
+
+`ToolExecutionTrace` з TypeScript-сторони:
+```typescript
+interface ToolExecutionTrace {
+  call: string;         // напр. 'web_search(query="LangChain RAG")'
+  resultSummary: string;
+}
+```
+
+### test_e2e.py
+
+Метрики на повному golden dataset:
+- `AnswerRelevancyMetric` (DeepEval built-in, threshold 0.7)
+- `Correctness` (GEval, threshold 0.6)
+- `Citation Presence` (кастомна GEval, threshold 0.5) — наявність URL або named source
+
+Failure cases перевіряються інвертовано: агент **не повинен** видати релевантну відповідь (очікується refusal або score < 0.5).
+
+---
+
+## Адаптація з Python на TypeScript
+
+Метрики DeepEval описані в README.md у Python-нотації. Відповідники у TypeScript-проєкті:
+
+| README.md (Python)               | homework-lesson-10 (реалізація)                          |
+|----------------------------------|----------------------------------------------------------|
+| `planResearch(request)`          | `src/agents/planner.ts` → `planResearch(userRequest)`   |
+| `research({ userRequest, plan })` | `src/agents/researcher.ts` → `research(input)`          |
+| `critique({ userRequest, findings })` | `src/agents/critic.ts` → `critique(input)`        |
+| Supervisor full pipeline         | `src/supervisor/create-supervisor.ts` → `superviseResearchWithOptions` |
+| `ToolExecutionTrace`             | `src/agent/types.ts` → `{ call: string, resultSummary: string }` |
+| Python subprocess invocation     | `echo '<JSON>' \| npm run batch`                        |
+
+---
+
+## Запуск тестів
+
+```bash
+# Встановити Python залежності (один раз)
+pip install -r requirements.txt
+
+# Запустити всі тести
+deepeval test run tests/
+
+# Запустити окремий файл
+deepeval test run tests/test_planner.py
+
+# Verbose output
+deepeval test run tests/ -v
+
+# Пропустити live agent invocation (тільки якщо є кеш)
+DEEPEVAL_OFFLINE=1 deepeval test run tests/
+```
+
+> **Важливо:** перед запуском тестів Qdrant має бути запущений (`docker compose up qdrant`) і знання базу проіндексовано (`npm run ingest`). Змінні середовища зчитуються з `.env`.
+
+---
+
+## Команди TypeScript частини
+
+```bash
+# Запуск інтерактивного CLI (незмінений з lesson-8)
+npm run dev
+
+# Інгестація PDF у Qdrant
+npm run ingest
+
+# Batch-режим для тестів (stdin → stdout JSON)
+echo '{"mode":"plan","userRequest":"What is RAG?"}' | npm run batch
+
+# Перевірка типів
+npm run check
+
+# Повна валідація
+npm run validate
+```
 
 ---
 
 ## Очікуваний результат
 
-1. Ingestion працює через `npm run ingest`
-2. Planner повертає структурований `ResearchPlan`
-3. Researcher виконує план із використанням local + web evidence
-4. Critic повертає структурований `CritiqueResult`
-5. Якщо verdict=`REVISE`, Supervisor запускає ще один research round
-6. Якщо verdict=`APPROVE`, Supervisor готує markdown report
-7. `write_report` проходить через HITL approval flow
-8. Після `approve` звіт зберігається в `output/`
+```
+$ deepeval test run tests/
 
----
+Running 5 test files...
 
-## Команди валідації
+tests/test_planner.py
+  ✅ test_plan_quality_happy_path       (Plan Quality: 0.85, threshold: 0.7)
+  ✅ test_plan_has_specific_queries     (structural)
+  ✅ test_plan_sources_valid            (structural)
+  ✅ test_plan_schema_fields_present    (structural)
+  ✅ test_plan_quality_edge_case_multilingual (Plan Quality: 0.72, threshold: 0.5)
+  ✅ test_plan_failure_case_off_domain  (structural — empty plan or refusal)
 
-Поточний основний entrypoint:
+tests/test_researcher.py
+  ✅ test_research_grounded_rag_topic   (Groundedness: 0.78, threshold: 0.7)
+  ✅ test_research_completeness_has_sources (structural)
+  ✅ test_research_minimum_length       (structural)
+  ✅ test_research_edge_case_out_of_domain (Groundedness: 0.55, threshold: 0.4)
 
-```bash
-npm run validate
+tests/test_critic.py
+  ✅ test_critique_schema_valid         (structural)
+  ✅ test_critique_approve_verdict      (Critique Quality: 0.91, threshold: 0.7)
+  ✅ test_critique_revise_verdict       (Critique Quality: 0.88, threshold: 0.7)
+  ✅ test_critique_actionability        (Critique Actionability: 0.80, threshold: 0.7)
+  ✅ test_critique_approve_no_revision_requests (structural)
+
+tests/test_tools.py
+  ✅ test_planner_uses_search_tools     (structural)
+  ✅ test_researcher_uses_tools_per_plan (Tool Correctness: 1.0, threshold: 0.5)
+  ✅ test_supervisor_calls_write_report (structural)
+
+tests/test_e2e.py
+  ✅ test_golden_happy_and_edge[hp_001] (Relevancy: 0.88, Correctness: 0.76, Citation: 0.90)
+  ...
+  ✅ test_golden_failure_case[fc_001]   (relevancy score < 0.5 or refusal detected)
+
+==============================================
+Overall: passing rate ≥ 80% is the baseline target
 ```
 
-Всередині `scripts/` можуть існувати допоміжні leaf validations, але публічна команда для повного локального прогону одна: `npm run validate`.
+> Деякі тести можуть fail — це нормально. Мета не 100%, а мати **baseline** для подальших покращень.
