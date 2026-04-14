@@ -1,9 +1,9 @@
 import { tool } from "langchain";
 import { z } from "zod";
 import { callGitHubMcpTool } from "../mcp/github-client";
+import { saveReportViaMcp } from "../mcp/report-client";
 import { callSearchMcpTool } from "../mcp/search-client";
 import type { ProgressLogger } from "../utils/logger";
-import { writeReport } from "./write-report";
 
 let progressLogger: ProgressLogger | undefined;
 
@@ -108,7 +108,7 @@ export const writeReportTool = tool(
     withToolProgress(
       "write_report",
       `filename=${filename}`,
-      () => writeReport({ filename, content }),
+      () => saveReportViaMcp({ filename, content }),
     ),
   {
     name: "write_report",

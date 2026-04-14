@@ -134,6 +134,12 @@ Implementation status:
 - approval decision не приймається всередині MCP server
 - HITL залишається на боці Supervisor
 
+Implementation status:
+
+- реалізовано в `src/mcp/report-server.ts`
+- локальний `write_report` tool у `langchain-tools.ts` маршрутизується в `ReportMCP` через `src/mcp/report-client.ts`
+- `resource://output-dir` повертає `outputDir`, `savedReports`, `reportCount`
+
 ---
 
 ## ACP Layer

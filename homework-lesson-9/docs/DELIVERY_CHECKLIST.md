@@ -17,7 +17,8 @@ A change set is not complete until:
 - [x] `Block 2. MCP Search Server` is implemented and validated
 - [x] Local agents reach `SearchMCP` through a thin MCP client/proxy layer
 - [x] The factual TS runtime also includes `GitHubMCP` for repository evidence used by `Researcher`
-- [ ] `ReportMCP` and `ACP server` remain pending
+- [x] `Block 3. MCP Report Server` is implemented and validated
+- [ ] `ACP server` remains pending
 
 ## Block 0. Baseline Alignment
 
@@ -92,15 +93,15 @@ Definition of done:
 
 Goal: move report persistence behind a dedicated MCP endpoint.
 
-- [ ] ReportMCP server bootstrap exists
-- [ ] `save_report` is exposed through ReportMCP
-- [ ] `resource://output-dir` is exposed
-- [ ] ReportMCP performs persistence only
-- [ ] Approval logic is not implemented inside ReportMCP
+- [x] ReportMCP server bootstrap exists
+- [x] `save_report` is exposed through ReportMCP
+- [x] `resource://output-dir` is exposed
+- [x] ReportMCP performs persistence only
+- [x] Approval logic is not implemented inside ReportMCP
 
 Definition of done:
 
-- [ ] Supervisor can save an approved report only through ReportMCP
+- [x] Supervisor can save an approved report only through ReportMCP
 
 ## Block 4. ACP Agent Server
 
@@ -214,7 +215,7 @@ Goal: ensure the protocol-based architecture is testable end to end.
 - [ ] Validation covers Block 2 local-agent integration through SearchMCP
 - [x] Validation covers GitHubMCP tool/resource discovery
 - [x] Validation covers local-agent integration through GitHubMCP
-- [ ] Validation covers ReportMCP tool/resource discovery
+- [x] Validation covers ReportMCP tool/resource discovery
 - [ ] Validation covers ACP agent registration
 - [ ] Validation covers Planner structured output via ACP
 - [ ] Validation covers Critic structured output via ACP
@@ -239,7 +240,7 @@ During implementation review, verify these items explicitly:
 - [ ] SearchMCP is shared across all ACP agents
 - [ ] ReportMCP is used only for persistence concerns
 - [ ] CLI/HITL logic remains in `src/main.ts`
-- [ ] Report persistence is gated by explicit approval
+- [x] Report persistence is gated by explicit approval
 
 ## Maintenance Rule
 

@@ -14,12 +14,16 @@ npm run invariant:check
 
 SEARCH_MCP_LOG="$(mktemp)"
 GITHUB_MCP_LOG="$(mktemp)"
+REPORT_MCP_LOG="$(mktemp)"
 echo "[validate] Starting SearchMCP server..."
 npm run mcp:search >"$SEARCH_MCP_LOG" 2>&1 &
 SEARCH_MCP_PID=$!
 echo "[validate] Starting GitHubMCP server..."
 npm run mcp:github >"$GITHUB_MCP_LOG" 2>&1 &
 GITHUB_MCP_PID=$!
+echo "[validate] Starting ReportMCP server..."
+npm run mcp:report >"$REPORT_MCP_LOG" 2>&1 &
+REPORT_MCP_PID=$!
 
 cleanup() {
   if [[ -n "${SEARCH_MCP_PID:-}" ]] && kill -0 "$SEARCH_MCP_PID" 2>/dev/null; then
@@ -29,6 +33,10 @@ cleanup() {
   if [[ -n "${GITHUB_MCP_PID:-}" ]] && kill -0 "$GITHUB_MCP_PID" 2>/dev/null; then
     kill "$GITHUB_MCP_PID" 2>/dev/null || true
     wait "$GITHUB_MCP_PID" 2>/dev/null || true
+  fi
+  if [[ -n "${REPORT_MCP_PID:-}" ]] && kill -0 "$REPORT_MCP_PID" 2>/dev/null; then
+    kill "$REPORT_MCP_PID" 2>/dev/null || true
+    wait "$REPORT_MCP_PID" 2>/dev/null || true
   fi
 }
 
@@ -40,6 +48,27 @@ bash scripts/smoke-search-mcp.sh
 
 echo "[validate] Running GitHubMCP discovery + invocation validation..."
 bash scripts/smoke-github-mcp.sh
+
+echo "[validate] Running ReportMCP discovery + invocation validation..."
+bash scripts/smoke-report-mcp.sh
+
+echo "[validate] Running write_report tool validation through ReportMCP..."
+node --input-type=module --import tsx -e '
+import { randomUUID } from "node:crypto";
+import { writeReportTool } from "./src/tools/langchain-tools.ts";
+
+const filename = `write-report-tool-${randomUUID()}.md`;
+const result = await writeReportTool.invoke({
+  filename,
+  content: "# Write Report Tool Validation\n\nSaved through writeReportTool routed via ReportMCP.",
+});
+
+if (!String(result).includes(filename)) {
+  throw new Error(`writeReportTool did not return the expected filename: ${result}`);
+}
+
+console.log(JSON.stringify({ result }, null, 2));
+'
 
 echo "[validate] Running planner validation through SearchMCP..."
 node --input-type=module --import tsx -e '
@@ -206,4 +235,4 @@ bash scripts/smoke-multi-agent-flow.sh
 echo "[validate] Running RAG smoke suite..."
 npm run rag:check
 
-echo "[validate] Block 2 validations passed. ACP- and ReportMCP-specific checks will be added in later blocks."
+echo "[validate] MCP blocks validations passed. ACP-specific checks will be added in later blocks."

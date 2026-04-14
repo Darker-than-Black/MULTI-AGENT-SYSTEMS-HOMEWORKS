@@ -8,6 +8,7 @@
     "ingest": "tsx src/rag/ingest.ts",
     "mcp:search": "tsx src/mcp/search-server.ts",
     "mcp:github": "tsx src/mcp/github-server.ts",
+    "mcp:report": "tsx src/mcp/report-server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "check": "tsc --noEmit",
