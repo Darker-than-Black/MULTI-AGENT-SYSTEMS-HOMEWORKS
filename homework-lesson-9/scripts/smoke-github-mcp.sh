@@ -14,10 +14,10 @@ import { GITHUB_MCP_URL } from "./src/config/env.ts";
 import {
   callMcpTextTool,
   connectMcpClient,
-  listMcpResources,
-  listMcpTools,
   readMcpJsonResource,
 } from "./src/mcp/shared-client.ts";
+
+const MCP_RESOURCE_TIMEOUT_MS = 15_000;
 
 const client = await connectMcpClient({
   clientName: "github-mcp-smoke",
@@ -25,8 +25,8 @@ const client = await connectMcpClient({
   serverUrl: GITHUB_MCP_URL,
 });
 
-const tools = await listMcpTools(client);
-const resources = await listMcpResources(client);
+const tools = await client.listTools(undefined, { signal: AbortSignal.timeout(MCP_RESOURCE_TIMEOUT_MS) });
+const resources = await client.listResources(undefined, { signal: AbortSignal.timeout(MCP_RESOURCE_TIMEOUT_MS) });
 const toolNames = tools.tools.map((tool) => tool.name).sort();
 const resourceUris = resources.resources.map((resource) => resource.uri).sort();
 

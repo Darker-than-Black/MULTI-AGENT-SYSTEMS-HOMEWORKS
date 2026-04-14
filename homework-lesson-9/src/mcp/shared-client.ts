@@ -42,14 +42,6 @@ export async function connectMcpClient({
   }
 }
 
-export async function listMcpTools(client: Client) {
-  return client.listTools(undefined, { signal: AbortSignal.timeout(MCP_RESOURCE_TIMEOUT_MS) });
-}
-
-export async function listMcpResources(client: Client) {
-  return client.listResources(undefined, { signal: AbortSignal.timeout(MCP_RESOURCE_TIMEOUT_MS) });
-}
-
 export async function callMcpTextTool(
   client: Client,
   toolName: string,
