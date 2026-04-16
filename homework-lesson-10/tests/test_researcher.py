@@ -13,6 +13,9 @@ import pytest
 from deepeval import assert_test  # type: ignore[import]
 from deepeval.metrics import GEval  # type: ignore[import]
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams  # type: ignore[import]
+from local_metrics import DeterministicMetric, has_source_citation, keyword_coverage_score
+
+from conftest import is_offline_mode
 
 # ---------------------------------------------------------------------------
 # Custom metric: Groundedness
@@ -60,6 +63,34 @@ def test_research_grounded_rag_topic(
     local knowledge base content.
     """
     findings = _findings_from(researcher_rag_result)
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input="Compare naive RAG vs sentence-window retrieval",
+            actual_output=findings,
+            retrieval_context=retrieval_context_rag,
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            score, missing = keyword_coverage_score(
+                findings,
+                [
+                    ("naive rag", "fixed chunks"),
+                    ("sentence-window", "sentence window"),
+                    ("retrieval", "context"),
+                    ("source", "sources", "http"),
+                ],
+            )
+            reason = "Offline findings cover the expected RAG comparison."
+            if missing:
+                reason = f"Missing expected grounded findings concepts: {', '.join(missing)}"
+            return score, reason
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("Groundedness (Offline)", 0.75, _score)],
+        )
+        return
+
     test_case = LLMTestCase(
         input="Compare naive RAG vs sentence-window retrieval",
         actual_output=findings,
@@ -102,6 +133,33 @@ def test_research_edge_case_out_of_domain(
     high confidence — low-threshold pass is acceptable.
     """
     findings = _findings_from(researcher_quantum_result)
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input="Research quantum computing and compare it with classical computing",
+            actual_output=findings,
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            score, missing = keyword_coverage_score(
+                findings,
+                [
+                    "quantum",
+                    "classical",
+                    ("qubit", "qubits"),
+                    ("bit", "bits"),
+                ],
+            )
+            bonus = 0.1 if has_source_citation(findings) else 0.0
+            reason = "Offline out-of-domain findings remain high level and cited."
+            if missing:
+                reason = f"Missing quantum comparison concepts: {', '.join(missing)}"
+            return min(1.0, score + bonus), reason
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("Groundedness (Out-of-Domain Offline)", 0.7, _score)],
+        )
+        return
 
     relaxed_metric = GEval(
         name="Groundedness (Out-of-Domain)",

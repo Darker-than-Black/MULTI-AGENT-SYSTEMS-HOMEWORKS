@@ -1,228 +1,257 @@
-# Домашнє завдання: тестування мультиагентної системи (розширення hw8)
+# Homework Lesson 10
 
-Напишіть автоматизовані тести для вашої мультиагентної системи з `homework-lesson-8`, використовуючи DeepEval та підходи з Лекції 10.
+Домашнє завдання з тестування мультиагентної системи на базі `homework-lesson-8`.
 
----
+У цій версії проєкту я не змінював базову архітектуру `Supervisor -> Planner -> Researcher -> Critic`, а додав до неї повноцінний шар автоматизованої перевірки через `DeepEval`, `pytest` і batch-bridge між Python та TypeScript.
 
-### Що змінюється порівняно з homework-8
+## Що реалізовано
 
-| Було (homework-lesson-8) | Стає (homework-lesson-10)                    |
-|-|----------------------------------------------|
-| Мультиагентна система без тестів | Та сама система + покриття тестами           |
-| Якість перевіряється вручну (vibe check) | Автоматизовані evals з метриками 0–1         |
-| Немає golden dataset | 10–15 golden examples для regression testing |
-| Немає CI-ready тестів | `deepeval test run` запускає всі тести       |
+- golden dataset для regression testing: `16` прикладів
+  - `5` happy path
+  - `6` edge case
+  - `5` failure case
+- component-level тести для `Planner`, `Researcher`, `Critic`
+- окремі тести на `Tool Correctness`
+- end-to-end перевірка повного pipeline
+- кастомні метрики під бізнес-логіку:
+  - якість плану
+  - groundedness відповіді
+  - quality/actionability критики
+  - citation presence
+- batch entrypoint `src/main-batch.ts`, щоб Python-тести могли стабільно викликати TypeScript-агентів
 
----
+## Архітектура
 
-### Що потрібно реалізувати
+Система зберігає основний патерн з lesson 8:
 
-#### 1. Golden Dataset (10–15 прикладів)
-
-Створіть golden dataset для тестування вашої системи. Кожен приклад — це пара `input` → `expected_output` з категорією:
-
-| Категорія | Кількість | Приклади |
-|---|-----------|---|
-| **Happy path** | 3–5       | Типові дослідницькі запити, на які система має дати повну відповідь |
-| **Edge cases** | 3–5       | Неоднозначні запити, дуже вузькі або дуже широкі теми, запити кількома мовами |
-| **Failure cases** | 3–5       | Запити поза доменом, безглузді запити, запити на заборонені теми |
-
-Збережіть як `tests/golden_dataset.json`:
-
-```json
-[
-  {
-    "input": "Compare naive RAG vs sentence-window retrieval",
-    "expected_output": "Naive RAG splits documents into fixed-size chunks...",
-    "category": "happy_path"
-  }
-]
+```text
+User
+  -> Supervisor
+     -> Planner
+     -> Researcher
+     -> Critic
+     -> write_report / final answer
 ```
 
-Можна використати Ragas `TestsetGenerator` для початкової генерації, але **обов'язково зробіть manual review** — виправте або видаліть неякісні приклади.
+Тестовий шар працює так:
 
-#### 2. Тести компонентів (component-level)
-
-Протестуйте кожного суб-агента окремо.
-
-**Planner Agent — структурованість плану:**
-
-```python
-from deepeval.metrics import GEval
-from deepeval.test_case import LLMTestCase, LLMTestCaseParams
-
-plan_quality = GEval(
-    name="Plan Quality",
-    evaluation_steps=[
-        "Check that the plan contains specific search queries (not vague)",
-        "Check that sources_to_check includes relevant sources for the topic",
-        "Check that the output_format matches what the user asked for",
-    ],
-    evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
-    model="gpt-5.4-mini",
-    threshold=0.7,
-)
+```text
+deepeval / pytest
+  -> tests/conftest.py
+  -> npm run batch
+  -> src/main-batch.ts
+  -> TypeScript agents
 ```
 
-**Critic Agent — якість критики:**
+Основні ролі:
 
-```python
-critique_quality = GEval(
-    name="Critique Quality",
-    evaluation_steps=[
-        "Check that the critique identifies specific issues, not vague complaints",
-        "Check that revision_requests are actionable (researcher can act on them)",
-        "If verdict is APPROVE, gaps list should be empty or contain only minor items",
-        "If verdict is REVISE, there must be at least one revision_request",
-    ],
-    evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
-    model="gpt-5.4-mini",
-    threshold=0.7,
-)
-```
+- `Supervisor` оркеструє workflow
+- `Planner` будує `ResearchPlan`
+- `Researcher` збирає докази через tools
+- `Critic` перевіряє повноту, свіжість і структурованість
+- `knowledge_search`, `web_search`, `read_url`, `write_report` використовуються як інструменти
 
-**Research Agent — groundedness відповіді:**
+## Структура проєкту
 
-```python
-groundedness = GEval(
-    name="Groundedness",
-    evaluation_steps=[
-        "Extract every factual claim from 'actual output'",
-        "For each claim, check if it can be directly supported by 'retrieval context'",
-        "Claims not present in retrieval context count as ungrounded, even if true",
-        "Score = number of grounded claims / total claims",
-    ],
-    evaluation_params=[
-        LLMTestCaseParams.ACTUAL_OUTPUT,
-        LLMTestCaseParams.RETRIEVAL_CONTEXT,
-    ],
-    model="gpt-5.4-mini",
-    threshold=0.7,
-)
-```
-
-#### 3. Тести Tool Correctness
-
-Перевірте, що агенти викликають правильні інструменти:
-
-```python
-from deepeval.test_case import LLMTestCase, ToolCall
-from deepeval.metrics import ToolCorrectnessMetric
-
-# Planner should use web_search and/or knowledge_search for exploration
-# Researcher should use web_search, read_url, knowledge_search
-# Critic should verify facts via web_search
-
-tool_metric = ToolCorrectnessMetric(threshold=0.5, model="gpt-5.4-mini")
-```
-
-Створіть мінімум 3 тест-кейси для tool correctness:
-- Planner отримує запит → має викликати пошукові інструменти
-- Researcher отримує план → має використати інструменти згідно з `sources_to_check`
-- Supervisor отримує APPROVE від Critic → має викликати `save_report`
-
-#### 4. End-to-end тест
-
-Протестуйте повний pipeline Supervisor → Planner → Researcher → Critic:
-
-```python
-answer_relevancy = AnswerRelevancyMetric(threshold=0.7, model="gpt-5.4-mini")
-
-correctness = GEval(
-    name="Correctness",
-    evaluation_steps=[
-        "Check whether the facts in 'actual output' contradict 'expected output'",
-        "Penalize omission of critical details",
-        "Different wording of the same concept is acceptable",
-    ],
-    evaluation_params=[
-        LLMTestCaseParams.INPUT,
-        LLMTestCaseParams.ACTUAL_OUTPUT,
-        LLMTestCaseParams.EXPECTED_OUTPUT,
-    ],
-    model="gpt-5.4-mini",
-    threshold=0.6,
-)
-```
-
-Запустіть evaluation на повному golden dataset і збережіть результати.
-
-### Структура проєкту
-
-```
+```text
 homework-lesson-10/
+├── src/
+│   ├── main.ts
+│   ├── main-batch.ts
+│   ├── agents/
+│   ├── supervisor/
+│   ├── tools/
+│   ├── rag/
+│   ├── schemas/
+│   ├── config/
+│   └── utils/
 ├── tests/
-│   ├── golden_dataset.json       # 15-20 golden examples
-│   ├── test_planner.py           # Planner agent tests
-│   ├── test_researcher.py        # Research agent tests (groundedness)
-│   ├── test_critic.py            # Critic agent tests
-│   ├── test_tools.py             # Tool correctness tests
-│   └── test_e2e.py               # End-to-end evaluation on golden dataset
-├── ... (all files from homework-lesson-8)
-└── README.md
+│   ├── conftest.py
+│   ├── golden_dataset.json
+│   ├── local_metrics.py
+│   ├── test_planner.py
+│   ├── test_researcher.py
+│   ├── test_critic.py
+│   ├── test_tools.py
+│   └── test_e2e.py
+├── output/
+├── docs/
+├── requirements.txt
+└── package.json
 ```
 
----
+## Тестове покриття
 
-### Як запустити тести
+### 1. Planner tests
+
+Перевіряють:
+
+- чи є план структурованим
+- чи `searchQueries` конкретні, а не розмиті
+- чи `sourcesToCheck` валідні
+- чи `outputFormat` відповідає запиту
+
+### 2. Researcher tests
+
+Перевіряють:
+
+- groundedness фактів відносно retrieval context
+- наявність джерел у відповіді
+- достатню змістовність findings
+- поведінку на out-of-domain запитах
+
+### 3. Critic tests
+
+Перевіряють:
+
+- валідність структури critique
+- консистентність `APPROVE` / `REVISE`
+- якість і конкретність `revisionRequests`
+- придатність критики для наступного циклу Researcher
+
+### 4. Tool correctness tests
+
+Перевіряють:
+
+- що Planner викликає інструменти для пошуку
+- що Researcher використовує tools відповідно до плану
+- що Supervisor коректно включає `write_report` у повному сценарії
+
+### 5. End-to-end tests
+
+Перевіряють:
+
+- релевантність фінальної відповіді
+- correctness відносно golden expected output
+- наявність цитувань
+- коректну відмову на failure-case запитах
+
+## Приклади написаних текстів
+
+Окремо в директорії `output/` збережені тексти, які система згенерувала під час тестів і smoke-сценаріїв. Це важливо для здачі, бо показує не лише наявність тестів, а й реальні артефакти роботи агентів.
+
+### Аналітичні тексти
+
+- `output/naive-rag-vs-sentence-window-retrieval.md`
+  - порівняння naive RAG і sentence-window retrieval
+  - текст пояснює різницю між chunk-based retrieval і retrieval з розширенням контексту
+- `output/bm25_vs_semantic_search_rag_key_differences.md`
+  - порівняння BM25 та semantic search у RAG
+  - показує, що агент може писати технічне порівняння з коректною термінологією
+- `output/llm_agents_tool_calling_external_systems.md`
+  - пояснення, як LLM-агенти використовують tool calling для взаємодії із зовнішніми системами
+  - цей текст демонструє роботу з web-джерелами та структуроване пояснення workflow
+- `output/rag_vs_lora_report.md`
+  - порівняння RAG і LoRA
+  - приклад відповіді на edge-case, де треба зіставити retrieval-підхід і fine-tuning
+
+### Освітні та адаптовані тексти
+
+- `output/rag_kid_friendly_explanation.md`
+  - пояснення RAG "як для 5-річної дитини"
+  - демонструє, що агент уміє спрощувати складну технічну тему без втрати сенсу
+- `output/multiahentni_systemy_mas_shcho_ce.md`
+  - коротке пояснення, що таке мультиагентні системи українською мовою
+  - показує підтримку мультимовних відповідей
+- `output/knowledge-base-one-sentence-summary.md`
+  - однореченнєвий summary knowledge base
+  - демонструє стислий формат відповіді на дуже широкий запит
+
+### Safe-response тексти
+
+- `output/system-prompt-disclosure-refusal.md`
+  - коротка коректна відмова на prompt-injection запит
+- `output/placeholder_topic_comparison_unable_to_complete.md`
+  - відповідь на malformed template-запит із плейсхолдерами
+- `output/secure-langchain-agents-botnet-misuse-prevention.md`
+  - безпечна реакція на шкідливий запит
+
+Тобто в межах домашнього завдання були написані не лише "правильні" дослідницькі тексти, а й:
+
+- пояснювальні тексти
+- порівняльні технічні тексти
+- україномовні тексти
+- дитячо-адаптовані тексти
+- safe refusal / clarification відповіді
+
+## Як запустити
+
+### Встановлення Node.js залежностей
 
 ```bash
-# Run all tests
+npm install
+```
+
+### Встановлення Python-залежностей для тестів
+
+```bash
+pip install -r requirements.txt
+```
+
+### Інгест знань у локальну knowledge base
+
+```bash
+npm run ingest
+```
+
+### Запуск CLI
+
+```bash
+npm run dev
+```
+
+### Запуск batch mode
+
+```bash
+echo '{"mode":"plan","userRequest":"Compare naive RAG vs sentence-window retrieval"}' | npm run batch
+```
+
+## Як запускати тести
+
+```bash
 deepeval test run tests/
+```
 
-# Run specific test file
+Окремі сценарії:
+
+```bash
 deepeval test run tests/test_planner.py
-
-# Run with verbose output
-deepeval test run tests/ -v
+deepeval test run tests/test_researcher.py
+deepeval test run tests/test_critic.py
+deepeval test run tests/test_tools.py
+deepeval test run tests/test_e2e.py
 ```
 
----
+Корисні додаткові команди:
 
-### Вимоги
-
-1. **Golden Dataset:** 15–20 прикладів (happy path + edge cases + failure cases), збережений як JSON
-2. **Component tests:** мінімум по одному тесту на Planner, Researcher, Critic
-3. **Tool correctness:** мінімум 3 тест-кейси
-4. **End-to-end:** evaluation на повному golden dataset з мінімум 2 метриками
-5. **Custom metric:** мінімум 1 GEval метрика під вашу бізнес-логіку
-6. **Thresholds:** обґрунтовані пороги (не 0.95 з першого дня — встановіть baseline, потім підвищуйте)
-7. **Тести запускаються:** `deepeval test run tests/` проходить без помилок
-
----
-
-### Очікуваний результат
-
-```
-$ deepeval test run tests/
-
-Running 5 test files...
-
-tests/test_planner.py
-  ✅ test_plan_quality (Plan Quality: 0.85, threshold: 0.7)
-  ✅ test_plan_has_queries (Plan Quality: 0.90, threshold: 0.7)
-
-tests/test_researcher.py
-  ✅ test_research_grounded (Groundedness: 0.78, threshold: 0.7)
-  ❌ test_research_edge_case (Groundedness: 0.45, threshold: 0.7)
-
-tests/test_critic.py
-  ✅ test_critique_approve (Critique Quality: 0.92, threshold: 0.7)
-  ✅ test_critique_revise (Critique Quality: 0.88, threshold: 0.7)
-
-tests/test_tools.py
-  ✅ test_planner_tools (Tool Correctness: 1.0, threshold: 0.5)
-  ✅ test_researcher_tools (Tool Correctness: 1.0, threshold: 0.5)
-  ✅ test_supervisor_save (Tool Correctness: 1.0, threshold: 0.5)
-
-tests/test_e2e.py
-  ✅ test_golden_dataset [15/20 passed]
-     Correctness: avg 0.74, min 0.42, max 0.95
-     Answer Relevancy: avg 0.81, min 0.55, max 0.98
-     Citation Presence: avg 0.70, min 0.30, max 1.00
-
-======================================================
-Overall: 19/20 passed (95.0% pass rate)
+```bash
+npm run check
+npm run validate
 ```
 
-> Деякі тести можуть fail — це нормально. Мета не 100% pass rate, а мати **baseline** для подальших покращень. Зафіксуйте поточні scores і поступово покращуйте систему.
+## Що саме здавати
+
+Для здачі домашнього завдання в цьому проєкті є все необхідне:
+
+- реалізація мультиагентної системи
+- `tests/golden_dataset.json`
+- component tests
+- tool correctness tests
+- end-to-end tests
+- збережені приклади згенерованих текстів у `output/`
+- документація:
+  - `docs/ARCHITECTURE.md`
+  - `docs/DELIVERY_CHECKLIST.md`
+  - `docs/README_TYPESCRIPT.md`
+
+## Висновок
+
+У `homework-lesson-10` я перетворив мультиагентну систему з попереднього домашнього завдання на систему, яку можна оцінювати автоматично. Основний результат цієї роботи не лише в тому, що агенти вміють генерувати відповіді, а в тому, що тепер їх можна стабільно перевіряти на:
+
+- якість планування
+- groundedness
+- tool usage
+- якість критики
+- поведінку на failure cases
+
+Окремо `output/` фіксує тексти, які були написані системою, тому домашнє завдання містить і тестову інфраструктуру, і реальні приклади результатів роботи агентів.

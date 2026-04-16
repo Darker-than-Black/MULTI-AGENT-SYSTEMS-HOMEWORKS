@@ -1,3 +1,16 @@
+import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { MAX_ITERATIONS } from "./config/env";
+import { planResearch } from "./agents/planner";
+import { research, type ResearchInput } from "./agents/researcher";
+import { critique, type CritiqueInput } from "./agents/critic";
+import { knowledgeSearch } from "./tools/knowledge-search";
+import {
+  superviseResearchWithOptions,
+  resumeSupervisorWithOptions,
+} from "./supervisor/create-supervisor";
+import type { ResearchPlan } from "./schemas/research-plan";
+
 /**
  * Non-interactive batch entrypoint for automated testing.
  *
@@ -13,19 +26,6 @@
  *   "critique"         — run critique only (requires findings in payload)
  *   "knowledge_search" — run knowledgeSearch only
  */
-
-import "dotenv/config";
-import { randomUUID } from "node:crypto";
-import { MAX_ITERATIONS } from "./config/env";
-import { planResearch } from "./agents/planner";
-import { research, type ResearchInput } from "./agents/researcher";
-import { critique, type CritiqueInput } from "./agents/critic";
-import { knowledgeSearch } from "./tools/knowledge-search";
-import {
-  superviseResearchWithOptions,
-  resumeSupervisorWithOptions,
-} from "./supervisor/create-supervisor";
-import type { ResearchPlan } from "./schemas/research-plan";
 
 type BatchMode = "full" | "plan" | "research" | "critique" | "knowledge_search";
 

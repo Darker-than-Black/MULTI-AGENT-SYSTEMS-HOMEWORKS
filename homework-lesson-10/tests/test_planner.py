@@ -13,6 +13,9 @@ import pytest
 from deepeval import assert_test  # type: ignore[import]
 from deepeval.metrics import GEval  # type: ignore[import]
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams  # type: ignore[import]
+from local_metrics import DeterministicMetric, keyword_coverage_score
+
+from conftest import is_offline_mode
 
 # ---------------------------------------------------------------------------
 # Custom metric: Plan Quality
@@ -57,11 +60,46 @@ def _plan_from(result: dict) -> dict:
 def test_plan_quality_happy_path(planner_rag_result: dict) -> None:
     """Planner should produce a high-quality plan for a core RAG domain query."""
     plan = _plan_from(planner_rag_result)
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input="Compare naive RAG vs sentence-window retrieval",
+            actual_output=json.dumps(plan, ensure_ascii=False),
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            score, missing = keyword_coverage_score(
+                " ".join(
+                    [
+                        plan.get("goal", ""),
+                        " ".join(plan.get("searchQueries", [])),
+                        " ".join(plan.get("sourcesToCheck", [])),
+                        plan.get("outputFormat", ""),
+                    ]
+                ),
+                [
+                    ("naive rag", "fixed-size chunk"),
+                    ("sentence-window", "sentence window"),
+                    ("knowledge_base", "knowledge base"),
+                    ("markdown", "comparison", "citations"),
+                ],
+            )
+            reason = "Offline planner fixture covers the core comparison."
+            if missing:
+                reason = f"Missing expected plan concepts: {', '.join(missing)}"
+            return score, reason
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("Plan Quality (Offline)", 0.75, _score)],
+            run_async=False,
+        )
+        return
+
     test_case = LLMTestCase(
         input="Compare naive RAG vs sentence-window retrieval",
         actual_output=json.dumps(plan, ensure_ascii=False),
     )
-    assert_test(test_case, [plan_quality_metric])
+    assert_test(test_case, [plan_quality_metric], run_async=False)
 
 
 def test_plan_has_specific_queries(planner_rag_result: dict) -> None:
@@ -102,6 +140,40 @@ def test_plan_quality_edge_case_multilingual(planner_multilingual_result: dict) 
     Threshold is relaxed because the planner may translate queries to English.
     """
     plan = _plan_from(planner_multilingual_result)
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input="що таке мультиагентні системи?",
+            actual_output=json.dumps(plan, ensure_ascii=False),
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            score, missing = keyword_coverage_score(
+                " ".join(
+                    [
+                        plan.get("goal", ""),
+                        " ".join(plan.get("searchQueries", [])),
+                        " ".join(plan.get("sourcesToCheck", [])),
+                        plan.get("outputFormat", ""),
+                    ]
+                ),
+                [
+                    ("multi-agent", "agent"),
+                    ("knowledge_base", "web"),
+                    ("ukrainian", "ukrainian-language user"),
+                ],
+            )
+            reason = "Offline multilingual plan includes MAS coverage."
+            if missing:
+                reason = f"Missing multilingual plan signals: {', '.join(missing)}"
+            return score, reason
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("Plan Quality (Multilingual Offline)", 0.66, _score)],
+            run_async=False,
+        )
+        return
+
     relaxed_metric = GEval(
         name="Plan Quality (Multilingual)",
         evaluation_steps=plan_quality_metric.evaluation_steps,
@@ -114,7 +186,7 @@ def test_plan_quality_edge_case_multilingual(planner_multilingual_result: dict) 
         input="що таке мультиагентні системи?",
         actual_output=json.dumps(plan, ensure_ascii=False),
     )
-    assert_test(test_case, [relaxed_metric])
+    assert_test(test_case, [relaxed_metric], run_async=False)
 
 
 def test_plan_failure_case_off_domain(planner_off_domain_result: dict) -> None:

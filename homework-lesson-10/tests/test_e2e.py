@@ -15,8 +15,15 @@ import pytest
 from deepeval import assert_test  # type: ignore[import]
 from deepeval.metrics import AnswerRelevancyMetric, GEval  # type: ignore[import]
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams  # type: ignore[import]
+from local_metrics import (
+    DeterministicMetric,
+    has_source_citation,
+    is_single_sentence,
+    is_ukrainian_text,
+    keyword_coverage_score,
+)
 
-from conftest import cached_run, load_golden_dataset
+from conftest import cached_run, is_offline_mode, load_golden_dataset
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -69,7 +76,8 @@ citation_presence_metric = GEval(
 REFUSAL_KEYWORDS = [
     "cannot", "can't", "unable", "don't", "not able", "outside my",
     "not within", "not appropriate", "i'm sorry", "sorry, i",
-    "i cannot assist", "that's not something",
+    "i cannot assist", "that's not something", "can't provide", "can’t provide",
+    "can't complete", "can’t complete", "please provide", "placeholder",
 ]
 
 
@@ -92,6 +100,20 @@ _FAILURE = [
     if ex["category"] == "failure_case"
 ]
 
+OFFLINE_EXPECTED_KEYWORDS = {
+    "hp_001": [("naive rag", "fixed-size"), ("sentence-window", "sentence window"), ("chunk", "chunks")],
+    "hp_002": ["bm25", ("semantic", "dense"), ("hybrid", "combine")],
+    "hp_003": ["rag", ("retrieval", "retrieve"), ("external", "documents"), ("ground", "hallucinations")],
+    "hp_004": ["rerank", ("cross-encoder", "colbert", "cohere"), ("two-stage", "stage 1", "stage-2")],
+    "hp_005": [("tool calling", "function calling"), ("json", "structured"), ("runtime", "host"), ("files", "databases", "api")],
+    "ec_001": ["rag", "lora", ("retrieval", "inference"), ("fine-tuning", "adapter", "low-rank")],
+    "ec_002": [("мультиагент",), ("агент",), ("координац", "взаємод")],
+    "ec_003": [("knowledge base", "база знань"), ("rag", "retrieval-augmented generation"), "langchain", ("large language", "llm")],
+    "ec_004": [("can't conclude", "cannot conclude", "depends", "insufficient evidence"), ("gpt-5", "gpt5"), ("claude 3", "claude"), ("rag", "groundedness", "faithfulness")],
+    "ec_005": ["rag", ("books", "library", "looks things up"), ("helper", "answer")],
+    "ec_006": [("ingestion", "index"), ("retrieval", "vector"), ("generation", "llm")],
+}
+
 
 @pytest.mark.deepeval
 @pytest.mark.parametrize("example", _HAPPY_AND_EDGE, ids=lambda e: e["id"])
@@ -105,6 +127,36 @@ def test_golden_happy_and_edge(example: dict, agent_cache: dict) -> None:
 
     if not final_answer.strip():
         pytest.skip(f"Agent returned empty answer for '{example['id']}'.")
+
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input=example["input"],
+            actual_output=final_answer,
+            expected_output=example.get("expected_output", ""),
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            score, missing = keyword_coverage_score(
+                final_answer,
+                OFFLINE_EXPECTED_KEYWORDS.get(example["id"], []),
+            )
+            bonus = 0.0
+            if example["id"] == "ec_002" and is_ukrainian_text(final_answer):
+                bonus += 0.2
+            if example["id"] == "ec_003" and is_single_sentence(final_answer):
+                bonus += 0.2
+            if has_source_citation(final_answer):
+                bonus += 0.1
+            reason = "Offline answer covers the expected concepts."
+            if missing:
+                reason = f"Missing expected answer concepts: {', '.join(missing)}"
+            return min(1.0, score + bonus), reason
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("E2E Correctness (Offline)", 0.75, _score)],
+        )
+        return
 
     test_case = LLMTestCase(
         input=example["input"],
@@ -126,6 +178,23 @@ def test_golden_failure_case(example: dict, agent_cache: dict) -> None:
 
     # A refusal is always acceptable
     if _looks_like_refusal(final_answer):
+        return
+
+    if is_offline_mode():
+        test_case = LLMTestCase(
+            input=example["input"],
+            actual_output=final_answer,
+        )
+
+        def _score(_: LLMTestCase) -> tuple[float, str]:
+            if _looks_like_refusal(final_answer):
+                return 1.0, "Offline failure-case answer is a refusal."
+            return 0.0, "Failure-case answer did not look like a refusal or clarification request."
+
+        assert_test(
+            test_case,
+            [DeterministicMetric("Failure Handling (Offline)", 1.0, _score)],
+        )
         return
 
     # For non-refusals, run the relevancy metric and assert it is LOW

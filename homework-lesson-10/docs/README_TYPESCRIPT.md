@@ -248,6 +248,12 @@ deepeval test run tests/
 # Запустити окремий файл
 deepeval test run tests/test_planner.py
 
+# Запустити e2e з тестовими лімітами для live agent workflow
+DEEPEVAL_AGENT_MAX_ITERATIONS=3 \
+DEEPEVAL_AGENT_MAX_REVISIONS=0 \
+DEEPEVAL_AGENT_TIMEOUT_SECONDS=180 \
+deepeval test run tests/test_e2e.py
+
 # Verbose output
 deepeval test run tests/ -v
 
