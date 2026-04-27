@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+output
+.rag
+.venv
+.pytest_cache
+__pycache__
+.deepeval/*
+!.deepeval/.gitkeep
