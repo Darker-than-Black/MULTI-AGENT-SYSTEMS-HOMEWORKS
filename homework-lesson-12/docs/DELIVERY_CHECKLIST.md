@@ -22,15 +22,34 @@
 
 Goal: зафіксувати стабільний стартовий стан перед Langfuse-інтеграцією.
 
-- [ ] Переконатися, що `npm ci` завершився без помилок.
-- [ ] Переконатися, що `npm run validate` проходить end-to-end.
-- [ ] Переконатися, що `Qdrant` піднімається автоматично через smoke suite.
-- [ ] Переконатися, що поточний Supervisor flow працює без Langfuse.
-- [ ] Зафіксувати, які саме файли будемо змінювати для lesson 12.
+- [x] Переконатися, що `npm ci` завершився без помилок.
+- [x] Переконатися, що `npm run validate` проходить end-to-end.
+- [x] Переконатися, що `Qdrant` піднімається автоматично через smoke suite.
+- [x] Переконатися, що поточний Supervisor flow працює без Langfuse.
+- [x] Зафіксувати, які саме файли будемо змінювати для lesson 12.
 
 Definition of done:
 
-- [ ] Є зелений baseline, до якого можна повертатися після кожного етапу інтеграції.
+- [x] Є зелений baseline, до якого можна повертатися після кожного етапу інтеграції.
+
+Frozen baseline snapshot:
+
+- `npm ci` успішно встановлює залежності.
+- `npm run validate` проходить повністю станом на `2026-04-27`.
+- `Qdrant` доступний через `scripts/ensure-qdrant.sh` і використовується RAG smoke suite.
+- Поточний runtime pre-Langfuse: у `package.json` ще немає `@langfuse/*` залежностей.
+- Поточний Supervisor/HITL flow підтверджено через `scripts/smoke-multi-agent-flow.sh`.
+- Основні lesson-12 цільові файли для наступних етапів:
+- `package.json`
+- `src/config/env.ts`
+- `src/main.ts`
+- `src/main-batch.ts`
+- `src/supervisor/create-supervisor.ts`
+- `src/agents/planner.ts`
+- `src/agents/researcher.ts`
+- `src/agents/critic.ts`
+- `src/config/prompts.ts`
+- новий Langfuse helper модуль (`src/lib/langfuse.ts`)
 
 ---
 
@@ -38,15 +57,15 @@ Definition of done:
 
 Goal: підготувати Langfuse project і ключі доступу.
 
-- [ ] Зареєструватися в `us.cloud.langfuse.com`.
-- [ ] Створити окремий project для `homework-12`.
-- [ ] Створити `Public Key` і `Secret Key`.
-- [ ] Записати `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` у `.env`.
-- [ ] Переконатися, що `.env.example` відображає потрібні Langfuse змінні.
+- [x] Зареєструватися в `us.cloud.langfuse.com`.
+- [x] Створити окремий project для `homework-12`.
+- [x] Створити `Public Key` і `Secret Key`.
+- [x] Записати `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` у `.env`.
+- [x] Переконатися, що `.env.example` відображає потрібні Langfuse змінні.
 
 Definition of done:
 
-- [ ] Локальний runtime має всі credentials, потрібні для Langfuse JS/TS SDK.
+- [x] Локальний runtime має всі credentials, потрібні для Langfuse JS/TS SDK.
 
 ---
 
@@ -54,21 +73,21 @@ Definition of done:
 
 Goal: додати Langfuse в runtime як технічну залежність і централізований client layer.
 
-- [ ] Додати в `package.json` Langfuse JS/TS залежності.
-- [ ] Додати Langfuse env exports у `src/config/env.ts`.
-- [ ] Створити окремий модуль для ініціалізації Langfuse client.
-- [ ] Додати helper для створення LangChain `CallbackHandler`.
-- [ ] Визначити єдине місце, де runtime вирішує: tracing enabled чи disabled.
+- [x] Додати в `package.json` Langfuse JS/TS залежності.
+- [x] Додати Langfuse env exports у `src/config/env.ts`.
+- [x] Створити окремий модуль для ініціалізації Langfuse client.
+- [x] Додати helper для створення LangChain `CallbackHandler`.
+- [x] Визначити єдине місце, де runtime вирішує: tracing enabled чи disabled.
 
 Рекомендовані цільові файли:
 
 - `package.json`
 - `src/config/env.ts`
-- `src/config/langfuse.ts` або `src/lib/langfuse.ts`
+- `src/lib/langfuse.ts`
 
 Definition of done:
 
-- [ ] Код може створити Langfuse client без розкиданого `process.env` по різних модулях.
+- [x] Код може створити Langfuse client без розкиданого `process.env` по різних модулях.
 
 ---
 

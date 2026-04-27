@@ -272,7 +272,7 @@ const compiledPlannerPrompt = plannerPrompt.compile({
 - [src/config/env.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/config/env.ts)
   Додати Langfuse env vars.
 
-- `src/config/langfuse.ts` або `src/lib/langfuse.ts`
+- `src/lib/langfuse.ts`
   Новий модуль для singleton client, handler factory, prompt access helpers.
 
 - [src/config/prompts.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/config/prompts.ts)
