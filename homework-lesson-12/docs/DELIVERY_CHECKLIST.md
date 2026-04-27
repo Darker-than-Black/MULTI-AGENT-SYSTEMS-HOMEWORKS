@@ -1,147 +1,299 @@
-# Delivery Checklist (Lesson 12 Baseline + Definition of Done)
+# Delivery Checklist (Lesson 12 Langfuse Roadmap)
 
-This checklist tracks the baseline validation and regression expectations for `homework-lesson-12`: TypeScript checks, architecture invariants, RAG smoke coverage, and the existing DeepEval regression suite.
+Цей документ є робочим планом для `homework-lesson-12`.
+Його ціль: провести проєкт від поточного TypeScript-baseline до повністю виконаного домашнього завдання з `Langfuse observability`, без пропуску критичних кроків.
+
+---
 
 ## Shared Gates
 
-A change set is not complete until:
+Робота не вважається завершеною, доки одночасно виконуються всі умови:
 
-- `deepeval test run tests/` passes
-- the golden dataset was manually reviewed, not only generated
-- thresholds were set to a realistic baseline instead of being overfit
-- failing cases were reviewed manually, not only by metrics
-- the test harness can invoke the TypeScript agents through `npm run batch`
+- `npm run validate` проходить повністю
+- tracing у Langfuse працює для реальних запусків MAS
+- traces мають `sessionId` і `userId`
+- усі system prompts агентів завантажуються з Langfuse, а не живуть як final source of truth у коді
+- налаштовано мінімум 2 Langfuse evaluator'и
+- є 4 скріншоти для здачі
 
-## Block 0. Test Harness Alignment
+---
 
-Goal: keep the Python test layer and the TypeScript batch bridge in sync.
+## Block 0. Baseline Freeze
 
-- [ ] `src/main-batch.ts` supports the test modes required by the suite.
-- [ ] `tests/conftest.py` provides a stable subprocess runner and shared fixtures.
-- [ ] `requirements.txt` includes the DeepEval test dependencies.
-- [ ] `package.json` exposes the batch entrypoint used by the tests.
-- [ ] `tests/` contains the expected component, tool, and e2e test files.
+Goal: зафіксувати стабільний стартовий стан перед Langfuse-інтеграцією.
 
-Definition of done:
-
-- [ ] The Python tests can invoke the TypeScript runtime without manual setup steps beyond the documented environment.
-
-## Block 1. Golden Dataset
-
-Goal: create a regression dataset that covers normal, ambiguous, and unsafe inputs.
-
-- [ ] `tests/golden_dataset.json` contains 15-20 examples.
-- [ ] The dataset includes `happy_path`, `edge_case`, and `failure_case` entries.
-- [ ] Happy-path examples cover typical research questions.
-- [ ] Edge cases cover narrow, broad, multilingual, or otherwise ambiguous queries.
-- [ ] Failure cases cover off-domain, nonsensical, or prohibited requests.
-- [ ] Each example includes the fields needed by the test suite, including the expected output and tool expectations where relevant.
-- [ ] The dataset was manually reviewed and cleaned up after generation.
+- [ ] Переконатися, що `npm ci` завершився без помилок.
+- [ ] Переконатися, що `npm run validate` проходить end-to-end.
+- [ ] Переконатися, що `Qdrant` піднімається автоматично через smoke suite.
+- [ ] Переконатися, що поточний Supervisor flow працює без Langfuse.
+- [ ] Зафіксувати, які саме файли будемо змінювати для lesson 12.
 
 Definition of done:
 
-- [ ] The golden dataset can be used for repeatable regression evaluation without requiring edits during test execution.
+- [ ] Є зелений baseline, до якого можна повертатися після кожного етапу інтеграції.
 
-## Block 2. Planner Component Tests
+---
 
-Goal: verify that the Planner produces a structured and useful plan.
+## Block 1. Langfuse Cloud Setup
 
-- [ ] Planner output contains the required structured fields.
-- [ ] The plan includes specific search queries, not vague topic labels.
-- [ ] `sourcesToCheck` contains valid sources for the query.
-- [ ] `outputFormat` matches the user request and downstream workflow.
-- [ ] `test_planner.py` includes a custom GEval metric for plan quality.
-- [ ] Planner behavior is checked for a multilingual query.
-- [ ] Planner behavior is checked for an off-domain request.
+Goal: підготувати Langfuse project і ключі доступу.
 
-Definition of done:
-
-- [ ] The Planner can turn a user request into a structured plan that downstream agents can consume without guessing.
-
-## Block 3. Researcher Component Tests
-
-Goal: verify that the Researcher stays grounded in evidence.
-
-- [ ] Researcher findings are evaluated against retrieval context.
-- [ ] Findings include source citations or named references.
-- [ ] Researcher outputs are substantive enough to be useful, not a one-line summary.
-- [ ] `test_researcher.py` includes a groundedness metric.
-- [ ] Researcher behavior is checked for an out-of-domain query.
+- [ ] Зареєструватися в `us.cloud.langfuse.com`.
+- [ ] Створити окремий project для `homework-12`.
+- [ ] Створити `Public Key` і `Secret Key`.
+- [ ] Записати `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` у `.env`.
+- [ ] Переконатися, що `.env.example` відображає потрібні Langfuse змінні.
 
 Definition of done:
 
-- [ ] Research findings are supported by retrievable evidence and degrade gracefully when the topic is out of scope.
+- [ ] Локальний runtime має всі credentials, потрібні для Langfuse JS/TS SDK.
 
-## Block 4. Critic Component Tests
+---
 
-Goal: verify that the Critic produces actionable review feedback.
+## Block 2. SDK Wiring у TypeScript
 
-- [ ] Critic output contains the required structured fields.
-- [ ] `verdict` is consistent with the quality of the findings.
-- [ ] `APPROVE` implies no revision requests.
-- [ ] `REVISE` includes at least one actionable revision request.
-- [ ] `test_critic.py` includes a custom GEval metric for critique quality.
-- [ ] `test_critic.py` includes a second custom GEval metric for revision-request actionability.
+Goal: додати Langfuse в runtime як технічну залежність і централізований client layer.
 
-Definition of done:
+- [ ] Додати в `package.json` Langfuse JS/TS залежності.
+- [ ] Додати Langfuse env exports у `src/config/env.ts`.
+- [ ] Створити окремий модуль для ініціалізації Langfuse client.
+- [ ] Додати helper для створення LangChain `CallbackHandler`.
+- [ ] Визначити єдине місце, де runtime вирішує: tracing enabled чи disabled.
 
-- [ ] The Critic can distinguish acceptable findings from ones that need targeted follow-up work.
+Рекомендовані цільові файли:
 
-## Block 5. Tool Correctness
-
-Goal: verify that each role uses the tools expected by the workflow.
-
-- [ ] Planner tool usage is checked for search-oriented exploration.
-- [ ] Researcher tool usage matches the requested sources from the plan.
-- [ ] Supervisor tool usage includes `write_report` after approval.
-- [ ] `test_tools.py` contains at least 3 tool-correctness test cases.
-- [ ] Tool checks use `ToolCorrectnessMetric` rather than only string assertions.
+- `package.json`
+- `src/config/env.ts`
+- `src/config/langfuse.ts` або `src/lib/langfuse.ts`
 
 Definition of done:
 
-- [ ] The role-to-tool mapping is validated directly by the test suite.
+- [ ] Код може створити Langfuse client без розкиданого `process.env` по різних модулях.
 
-## Block 6. End-to-End Regression
+---
 
-Goal: validate the full Supervisor -> Planner -> Researcher -> Critic pipeline on the golden dataset.
+## Block 3. Root Trace Integration
 
-- [ ] `test_e2e.py` runs the full pipeline on happy-path and edge-case examples.
-- [ ] `test_e2e.py` includes at least two metrics for the full answer.
-- [ ] Failure cases are evaluated separately and must refuse or score low on relevancy.
-- [ ] The e2e suite records results for regression review.
-- [ ] The output is checked manually when the score changes materially.
+Goal: кожен запуск MAS має створювати один top-level trace з повним деревом дочірніх викликів.
 
-Definition of done:
-
-- [ ] The full pipeline is covered by regression tests that can be rerun on the same dataset.
-
-## Block 7. Thresholds + Hardening
-
-Goal: keep the evaluation suite useful as the implementation evolves.
-
-- [ ] Thresholds are set to a realistic baseline, not an artificially high target.
-- [ ] Threshold changes are documented when the system improves.
-- [ ] Metric choices match the behavior being evaluated.
-- [ ] The suite remains green on a clean run of `deepeval test run tests/`.
-- [ ] `npm run validate` passes end-to-end, including the Docker-backed RAG smoke suite.
-- [ ] Any skipped tests have an explicit reason and do not hide real regressions.
+- [ ] Обгорнути `main.ts` у top-level Langfuse trace/span.
+- [ ] Обгорнути `main-batch.ts` у top-level Langfuse trace/span.
+- [ ] Використати `propagateAttributes(...)` на старті workflow.
+- [ ] Передавати Langfuse callbacks у LangChain/LangGraph invoke path.
+- [ ] Переконатися, що trace не створюється занадто пізно, вже після першого LLM/tool call.
 
 Definition of done:
 
-- [ ] The test suite is stable enough to serve as a regression gate for the lesson-12 baseline before Langfuse integration work begins.
+- [ ] Один user request = один trace у Langfuse.
+- [ ] Усередині trace видно Supervisor, agent, tool, model виклики як єдине дерево.
 
-## Explicit Review Checklist
+---
 
-During implementation review, verify these items explicitly:
+## Block 4. Supervisor / Agent Callback Coverage
 
-- [ ] The golden dataset has the expected category mix.
-- [ ] Planner, Researcher, and Critic are tested independently.
-- [ ] Researcher findings are grounded in retrieved evidence.
-- [ ] Critic revision requests are concrete enough to act on.
-- [ ] Tool-correctness checks match the intended role behavior.
-- [ ] Failure cases do not produce confident answers.
-- [ ] The final e2e run was reviewed manually, not only accepted by score.
+Goal: жоден критичний агентний виклик не випадає з tracing coverage.
+
+- [ ] Підключити callback handler до Supervisor invoke path.
+- [ ] Перевірити Planner invoke path.
+- [ ] Перевірити Researcher invoke path.
+- [ ] Перевірити Critic invoke path.
+- [ ] Перевірити, що tool calls також відображаються у trace.
+- [ ] Перевірити, що HITL interrupt/resume не розриває trace context.
+
+Definition of done:
+
+- [ ] Trace tree містить повну послідовність `plan -> research -> critique -> write`.
+
+---
+
+## Block 5. Session / User / Tag Strategy
+
+Goal: traces мають коректну атрибуцію на рівні session і user.
+
+- [ ] Визначити правило для `sessionId`.
+- [ ] Визначити правило для `userId`.
+- [ ] Визначити мінімальний набір `tags`.
+- [ ] Прокинути ці атрибути через `propagateAttributes(...)`.
+- [ ] Переконатися, що той самий `sessionId` зберігається під час HITL resume flow.
+
+Рекомендований стартовий mapping:
+
+- `sessionId`: або стабільний CLI session id, або узгоджений runtime id
+- `userId`: технічний локальний user id
+- `tags`: `homework-12`, `cli`, `batch`, `rag`
+
+Definition of done:
+
+- [ ] У Langfuse `Sessions` видно згруповані traces.
+- [ ] У Langfuse `Users` видно user, який породив traces.
+
+---
+
+## Block 6. Prompt Inventory
+
+Goal: підготувати всі agent prompts до міграції в Langfuse Prompt Management.
+
+- [ ] Зібрати повний список system prompts у коді.
+- [ ] Перевірити, які з них статичні, а які потребують template variables.
+- [ ] Визначити назви prompts у Langfuse.
+- [ ] Зафіксувати, які поля потрібно параметризувати через `compile(...)`.
+
+Мінімальний inventory:
+
+- [ ] `supervisor-system`
+- [ ] `planner-system`
+- [ ] `researcher-system`
+- [ ] `critic-system`
+
+Definition of done:
+
+- [ ] Є повна мапа: prompt у коді -> prompt name у Langfuse.
+
+---
+
+## Block 7. Prompt Management Migration
+
+Goal: system prompts більше не є hardcoded source of truth у TypeScript.
+
+- [ ] Створити prompts у Langfuse UI.
+- [ ] Додати label `production` для робочих версій.
+- [ ] Реалізувати в коді prompt loader через Langfuse JS/TS SDK.
+- [ ] Замінити пряме використання prompt constants на Langfuse-backed loading.
+- [ ] Якщо потрібні змінні, підключити `prompt.compile({...})`.
+- [ ] Якщо використовуються LangChain templates, за потреби застосувати `getLangchainPrompt()`.
+- [ ] Залишити в коді лише fallback або adapter logic, але не дублювати реальний source of truth.
+
+Definition of done:
+
+- [ ] У Langfuse UI видно всі prompts.
+- [ ] Runtime реально завантажує prompts із Langfuse.
+- [ ] У коді немає робочих hardcoded system prompts як основного джерела.
+
+---
+
+## Block 8. Trace Quality Verification
+
+Goal: перевірити, що traces не просто існують, а дійсно корисні для observability.
+
+- [ ] Запустити мінімум 3 різні user requests.
+- [ ] Перевірити, що кожен запуск створює окремий trace.
+- [ ] Перевірити, що trace name осмислений і стабільний.
+- [ ] Перевірити, що input/output trace читаються в UI.
+- [ ] Перевірити, що tool calls і LLM spans відображаються всередині дерева.
+- [ ] Перевірити, що хоча б один trace проходить через HITL write_report flow.
+
+Definition of done:
+
+- [ ] У `Tracing -> Traces` видно 3-5 якісних traces, придатних для аналізу та evaluation.
+
+---
+
+## Block 9. LLM-as-a-Judge Evaluators
+
+Goal: увімкнути автоматичну оцінку нових traces у Langfuse.
+
+- [ ] Визначити 2-3 найбільш корисні критерії оцінки для цієї MAS.
+- [ ] Створити мінімум 2 evaluator'и в Langfuse UI.
+- [ ] Вибрати різні `score type`, якщо це доречно.
+- [ ] Налаштувати evaluator prompts через `{{input}}` і `{{output}}`.
+- [ ] Переконатися, що evaluator'и запускаються саме на потрібних traces.
+
+Рекомендовані evaluator'и:
+
+- [ ] `answer_relevance`
+- [ ] `groundedness`
+- [ ] `report_structure` або `completeness`
+
+Definition of done:
+
+- [ ] Нові traces автоматично отримують evaluator scores.
+
+---
+
+## Block 10. Evaluator Result Verification
+
+Goal: переконатися, що online evaluation справді спрацював після runtime запусків.
+
+- [ ] Зробити 3-5 нових запусків уже після налаштування evaluator'ів.
+- [ ] Дочекатися асинхронної обробки Langfuse.
+- [ ] Відкрити trace details і перевірити вкладку `Scores`.
+- [ ] Перевірити, що evaluator status показує оброблені traces.
+- [ ] Перевірити, що scores виглядають логічно, а не випадково.
+
+Definition of done:
+
+- [ ] У кожного потрібного trace є автоматично проставлені scores.
+
+---
+
+## Block 11. Regression Safety
+
+Goal: не зламати наявний baseline під час observability-інтеграції.
+
+- [ ] Після кожного значущого етапу проганяти `npm run validate`.
+- [ ] Не ламати `main.ts` interactive flow.
+- [ ] Не ламати `main-batch.ts` batch flow.
+- [ ] Не ламати `threadId` resume semantics.
+- [ ] Не змішувати Langfuse runtime logic з RAG business logic без потреби.
+- [ ] Не втратити чинні smoke checks і DeepEval baseline.
+
+Definition of done:
+
+- [ ] Після повної інтеграції baseline залишається робочим і перевіряється тим самим validation entrypoint.
+
+---
+
+## Block 12. Submission Assets
+
+Goal: зібрати все, що потрібно для фінальної здачі.
+
+- [ ] Зробити скріншот trace tree.
+- [ ] Зробити скріншот session view.
+- [ ] Зробити скріншот evaluator scores.
+- [ ] Зробити скріншот prompt management.
+- [ ] Покласти всі 4 скріншоти в `screenshots/`.
+- [ ] Перевірити, що скріншоти реально показують саме цей проєкт, а не сторонній demo.
+
+Definition of done:
+
+- [ ] Є повний пакет артефактів для здачі lesson 12.
+
+---
+
+## Final Definition of Done
+
+Домашнє завдання виконано лише тоді, коли:
+
+- [ ] `npm run validate` зелений
+- [ ] `Langfuse` інтегрований у TypeScript runtime
+- [ ] кожен MAS запуск створює повний trace
+- [ ] traces мають `sessionId` і `userId`
+- [ ] prompts мігровані в Langfuse Prompt Management
+- [ ] evaluator'и налаштовані й автоматично ставлять scores
+- [ ] `screenshots/` містить 4 потрібні скріншоти
+- [ ] документація синхронізована з фактичною реалізацією
+
+---
+
+## Recommended Execution Order
+
+Щоб рухатися без хаосу, працюємо саме в такій послідовності:
+
+1. `Baseline Freeze`
+2. `Langfuse Cloud Setup`
+3. `SDK Wiring у TypeScript`
+4. `Root Trace Integration`
+5. `Supervisor / Agent Callback Coverage`
+6. `Session / User / Tag Strategy`
+7. `Prompt Inventory`
+8. `Prompt Management Migration`
+9. `Trace Quality Verification`
+10. `LLM-as-a-Judge Evaluators`
+11. `Evaluator Result Verification`
+12. `Submission Assets`
+
+---
 
 ## Maintenance Rule
 
-If the test strategy, dataset shape, metric set, or acceptance thresholds change materially, update this document in the same commit as the test changes.
+Якщо змінюється порядок робіт, структура інтеграції Langfuse, source of truth для prompts, або acceptance criteria для lesson 12, цей документ треба оновити в тому самому коміті.
