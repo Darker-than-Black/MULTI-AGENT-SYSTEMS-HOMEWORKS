@@ -1,4 +1,5 @@
 import { HumanMessage } from "@langchain/core/messages";
+import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { Command } from "@langchain/langgraph";
 import { MemorySaver } from "@langchain/langgraph-checkpoint";
 import { ChatOpenAI } from "@langchain/openai";
@@ -17,13 +18,16 @@ import {
   SUPERVISOR_MAX_RESEARCH_REVISIONS,
 } from "../config/agent-policy";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
-import { SUPERVISOR_SYSTEM_PROMPT } from "../config/prompts";
+import { mergeLangfusePromptMetadata } from "../lib/langfuse-context";
+import { resolveSystemPrompt } from "../lib/langfuse-prompts";
+import { runWithLangfuseObservation } from "../lib/langfuse-runtime";
 import type { CritiqueResult } from "../schemas/critique-result";
 import type { ResearchPlan } from "../schemas/research-plan";
 import { setToolProgressLogger } from "../tools/langchain-tools";
 import {
   parseCritiqueToolResult,
   parsePlanToolResult,
+  setSupervisorLangChainCallbacks,
   setSupervisorProgressLogger,
   supervisorTools,
 } from "./supervisor-tools";
@@ -65,6 +69,7 @@ export interface RunSupervisorOptions {
   threadId: string;
   maxIterations?: number;
   onProgress?: ProgressLogger;
+  callbacks?: BaseCallbackHandler[];
 }
 
 interface InvokeSupervisorOptions {
@@ -88,7 +93,6 @@ interface SupervisorAgentFactoryOptions {
   tools?: typeof supervisorTools;
 }
 
-let supervisorAgent: ReturnType<typeof createAgent> | null = null;
 const supervisorCheckpointer = new MemorySaver();
 const pendingReviewStates = new Map<string, PendingReviewState>();
 const hitlMiddleware = humanInTheLoopMiddleware({
@@ -115,27 +119,27 @@ function buildDefaultSupervisorModel(): LanguageModelLike {
   });
 }
 
-export function createSupervisorAgent(
+export async function createSupervisorAgent(
   options: SupervisorAgentFactoryOptions = {},
 ) {
-  const hasOverrides = Boolean(options.model || options.systemPrompt || options.tools);
-  if (!hasOverrides && supervisorAgent) {
-    return supervisorAgent;
-  }
+  const systemPrompt = options.systemPrompt
+    ? { content: options.systemPrompt, prompt: null }
+    : await resolveSystemPrompt("supervisor", {
+      max_research_revisions: String(SUPERVISOR_MAX_RESEARCH_REVISIONS),
+    });
 
   const agent = createAgent({
     model: options.model ?? buildDefaultSupervisorModel(),
-    systemPrompt: (options.systemPrompt ?? SUPERVISOR_SYSTEM_PROMPT).trim(),
+    systemPrompt: systemPrompt.content.trim(),
     tools: options.tools ?? supervisorTools,
     middleware: [hitlMiddleware],
     checkpointer: supervisorCheckpointer,
   });
 
-  if (!hasOverrides) {
-    supervisorAgent = agent;
-  }
-
-  return agent;
+  return {
+    agent,
+    prompt: systemPrompt.prompt,
+  };
 }
 
 export async function superviseResearchWithOptions(
@@ -226,114 +230,132 @@ async function invokeSupervisor(
     throw new Error("Supervisor threadId cannot be empty.");
   }
 
-  const supervisor = createSupervisorAgent();
-  const recursionLimit = getSupervisorRecursionLimit(options.maxIterations);
+  return runWithLangfuseObservation({
+    name: "supervisor",
+    input: summarizeSupervisorInput(input, threadId),
+    task: async () => {
+      const { agent: supervisor, prompt } = await createSupervisorAgent();
+      const recursionLimit = getSupervisorRecursionLimit(options.maxIterations);
 
-  setToolProgressLogger(options.onProgress);
-  setSupervisorProgressLogger(options.onProgress);
+      setToolProgressLogger(options.onProgress);
+      setSupervisorProgressLogger(options.onProgress);
+      setSupervisorLangChainCallbacks(options.callbacks);
 
-  try {
-    const result = await supervisor.invoke(
-      input,
-      {
-        recursionLimit,
-        configurable: {
-          thread_id: threadId,
-        },
-      },
-    );
-
-    const assistantMessages = result.messages.filter(
-      (message: typeof result.messages[number]) => message.getType() === "ai",
-    );
-    const toolMessages = result.messages.filter(
-      (message: typeof result.messages[number]) => message.getType() === "tool",
-    );
-    const lastAssistant = assistantMessages.at(-1);
-    const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
-    const originalUserRequest = findOriginalUserRequest(result.messages);
-    const pendingReview = findPendingWriteReportReview((result as { __interrupt__?: unknown }).__interrupt__);
-    const baseOutput: SupervisorBaseOutput = {
-      finalAnswer: finalAnswer || pendingReview?.content || "Supervisor returned an empty response.",
-      iterations: assistantMessages.length || 1,
-      toolExecutions: buildToolExecutionTrace(result.messages),
-      plan: findLatestPlan(toolMessages),
-      critique: findLatestCritique(toolMessages),
-      wroteReport: didWriteReport(toolMessages),
-    };
-
-    if (pendingReview) {
-      if (shouldContinueRevisionCycle(baseOutput)) {
-        options.onProgress?.({
-          scope: "supervisor",
-          phase: "info",
-          message: "Supervisor blocked premature human review",
-          detail: "Critic still requires another revision round before write_report is allowed. Redirecting to Researcher.",
-        });
-
-        if (!baseOutput.plan) {
-          throw new Error("Supervisor cannot continue revision cycle without an existing research plan.");
-        }
-
-        const continuedResult = await rejectPrematureWriteReport(
+      try {
+        const result = await supervisor.invoke(
+          input,
           {
-            ...baseOutput,
-            status: "completed",
-            pendingReview: null,
+            callbacks: options.callbacks,
+            recursionLimit,
+            configurable: {
+              thread_id: threadId,
+            },
+            metadata: mergeLangfusePromptMetadata(undefined, prompt),
           },
-          options,
         );
 
-        return continueSupervisorWorkflow(continuedResult, options);
+        const assistantMessages = result.messages.filter(
+          (message: typeof result.messages[number]) => message.getType() === "ai",
+        );
+        const toolMessages = result.messages.filter(
+          (message: typeof result.messages[number]) => message.getType() === "tool",
+        );
+        const lastAssistant = assistantMessages.at(-1);
+        const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
+        const originalUserRequest = findOriginalUserRequest(result.messages);
+        const pendingReview = findPendingWriteReportReview((result as { __interrupt__?: unknown }).__interrupt__);
+        const baseOutput: SupervisorBaseOutput = {
+          finalAnswer: finalAnswer || pendingReview?.content || "Supervisor returned an empty response.",
+          iterations: assistantMessages.length || 1,
+          toolExecutions: buildToolExecutionTrace(result.messages),
+          plan: findLatestPlan(toolMessages),
+          critique: findLatestCritique(toolMessages),
+          wroteReport: didWriteReport(toolMessages),
+        };
+
+        if (pendingReview) {
+          if (shouldContinueRevisionCycle(baseOutput)) {
+            options.onProgress?.({
+              scope: "supervisor",
+              phase: "info",
+              message: "Supervisor blocked premature human review",
+              detail: "Critic still requires another revision round before write_report is allowed. Redirecting to Researcher.",
+            });
+
+            if (!baseOutput.plan) {
+              throw new Error("Supervisor cannot continue revision cycle without an existing research plan.");
+            }
+
+            const continuedResult = await rejectPrematureWriteReport(
+              {
+                ...baseOutput,
+                status: "completed",
+                pendingReview: null,
+              },
+              options,
+            );
+
+            return continueSupervisorWorkflow(continuedResult, options);
+          }
+
+          options.onProgress?.({
+            scope: "supervisor",
+            phase: "info",
+            message: "Waiting for human review",
+            detail: pendingReview.filename,
+          });
+
+          pendingReviewStates.set(threadId, {
+            originalUserRequest,
+            filename: pendingReview.filename,
+            content: pendingReview.content,
+          });
+
+          return {
+            ...baseOutput,
+            status: "interrupted",
+            pendingReview,
+          };
+        }
+
+        if (!invokeOptions.suppressSuccessLog) {
+          options.onProgress?.({
+            scope: "supervisor",
+            phase: "success",
+            message: "Supervisor finished",
+            detail: `${assistantMessages.length || 1} iteration(s)`,
+          });
+        }
+
+        return {
+          ...baseOutput,
+          status: "completed",
+          pendingReview: null,
+        };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown supervisor error.";
+        options.onProgress?.({
+          scope: "supervisor",
+          phase: "error",
+          message: "Supervisor failed",
+          detail: message,
+        });
+        throw error;
+      } finally {
+        setToolProgressLogger(undefined);
+        setSupervisorProgressLogger(undefined);
+        setSupervisorLangChainCallbacks(undefined);
       }
-
-      options.onProgress?.({
-        scope: "supervisor",
-        phase: "info",
-        message: "Waiting for human review",
-        detail: pendingReview.filename,
-      });
-
-      pendingReviewStates.set(threadId, {
-        originalUserRequest,
-        filename: pendingReview.filename,
-        content: pendingReview.content,
-      });
-
-      return {
-        ...baseOutput,
-        status: "interrupted",
-        pendingReview,
-      };
-    }
-
-    if (!invokeOptions.suppressSuccessLog) {
-      options.onProgress?.({
-        scope: "supervisor",
-        phase: "success",
-        message: "Supervisor finished",
-        detail: `${assistantMessages.length || 1} iteration(s)`,
-      });
-    }
-
-    return {
-      ...baseOutput,
-      status: "completed",
-      pendingReview: null,
-    };
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown supervisor error.";
-    options.onProgress?.({
-      scope: "supervisor",
-      phase: "error",
-      message: "Supervisor failed",
-      detail: message,
-    });
-    throw error;
-  } finally {
-    setToolProgressLogger(undefined);
-    setSupervisorProgressLogger(undefined);
-  }
+    },
+    mapOutput: (result) => ({
+      status: result.status,
+      finalAnswer: result.finalAnswer,
+      iterations: result.iterations,
+      wroteReport: result.wroteReport,
+      critiqueVerdict: result.critique?.verdict ?? null,
+      pendingReview: result.pendingReview?.filename ?? null,
+    }),
+  });
 }
 
 async function requestWriteReportReview(
@@ -361,6 +383,25 @@ async function requestWriteReportReview(
     { messages: [new HumanMessage(followUpPrompt)] },
     options,
   );
+}
+
+function summarizeSupervisorInput(
+  input: { messages: HumanMessage[] } | Command,
+  threadId: string,
+): Record<string, unknown> {
+  if (input instanceof Command) {
+    return {
+      threadId,
+      type: "resume-command",
+    };
+  }
+
+  return {
+    threadId,
+    type: "message-run",
+    messageCount: input.messages.length,
+    latestMessage: input.messages.at(-1)?.content ?? null,
+  };
 }
 
 async function requestRevisionContinuation(

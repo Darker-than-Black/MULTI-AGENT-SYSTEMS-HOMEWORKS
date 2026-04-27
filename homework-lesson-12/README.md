@@ -78,6 +78,14 @@ LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
 Використовуйте `get_prompt(name, label=...)` з Langfuse Python SDK для завантаження промптів, та `.compile(**variables)` для підстановки template variables. Див. [документацію Prompt Management](https://langfuse.com/docs/prompts).
 
+У цьому репозиторії системні промпти агентів синхронізуються в Langfuse через:
+
+```bash
+npm run langfuse:sync-prompts
+```
+
+Скрипт створює або оновлює 4 system prompts і призначає label `production`.
+
 **Критерій:**
 - У коді **жодних захардкоджених system prompts** — усі завантажуються з Langfuse
 - У Langfuse UI → **Prompts** — видно промпт для кожного агента

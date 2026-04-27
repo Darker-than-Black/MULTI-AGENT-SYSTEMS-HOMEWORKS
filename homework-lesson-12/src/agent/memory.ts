@@ -1,5 +1,5 @@
 import { AIMessage, HumanMessage, SystemMessage, trimMessages } from "langchain";
-import { SUPERVISOR_SYSTEM_PROMPT } from "../config/prompts";
+import { resolveSystemPrompt } from "../lib/langfuse-prompts";
 import { truncateText } from "../utils/truncate";
 import type { AgentMessage } from "./types";
 import {
@@ -35,7 +35,8 @@ async function enforceMemoryBudget(messages: AgentMessage[]): Promise<void> {
   });
 
   if (trimmed.length === 0 || trimmed[0].getType() !== "system") {
-    trimmed.unshift(new SystemMessage(SUPERVISOR_SYSTEM_PROMPT.trim()));
+    const systemPrompt = await resolveSystemPrompt("researcher");
+    trimmed.unshift(new SystemMessage(systemPrompt.content.trim()));
   }
 
   messages.splice(0, messages.length, ...(trimmed as AgentMessage[]));

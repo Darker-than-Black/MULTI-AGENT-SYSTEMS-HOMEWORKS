@@ -137,8 +137,8 @@ if (parsedCritique.verdict !== "APPROVE") {
   throw new Error("Supervisor critique parser should preserve structured critique payloads.");
 }
 
-const supervisor = createSupervisorAgent();
-if (!supervisor) {
+const supervisor = await createSupervisorAgent();
+if (!supervisor.agent) {
   throw new Error("Supervisor agent should be created successfully.");
 }
 

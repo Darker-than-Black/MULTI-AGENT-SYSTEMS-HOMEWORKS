@@ -4,7 +4,12 @@ import { createAgent } from "langchain";
 import { getCriticRecursionLimit } from "../config/agent-policy";
 import { CritiqueResultSchema, type CritiqueResult } from "../schemas/critique-result";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
-import { CRITIC_SYSTEM_PROMPT } from "../config/prompts";
+import {
+  mergeLangfusePromptMetadata,
+  type LangChainInvokeOptions,
+} from "../lib/langfuse-context";
+import { resolveSystemPrompt } from "../lib/langfuse-prompts";
+import { runWithLangfuseObservation } from "../lib/langfuse-runtime";
 import { knowledgeSearchTool, readUrlTool, webSearchTool } from "../tools/langchain-tools";
 
 export interface CritiqueInput {
@@ -12,34 +17,35 @@ export interface CritiqueInput {
   findings: string;
 }
 
-let criticAgent: ReturnType<typeof createAgent> | null = null;
-
-export function createCriticAgent() {
-  if (criticAgent) {
-    return criticAgent;
-  }
-
+export async function createCriticAgent() {
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
 
+  const systemPrompt = await resolveSystemPrompt("critic");
   const model = new ChatOpenAI({
     model: MODEL_NAME,
     temperature: TEMPERATURE,
     apiKey: OPENAI_API_KEY,
   });
 
-  criticAgent = createAgent({
+  const agent = createAgent({
     model,
-    systemPrompt: CRITIC_SYSTEM_PROMPT.trim(),
+    systemPrompt: systemPrompt.content.trim(),
     tools: [webSearchTool, readUrlTool, knowledgeSearchTool],
     responseFormat: CritiqueResultSchema,
   });
 
-  return criticAgent;
+  return {
+    agent,
+    prompt: systemPrompt.prompt,
+  };
 }
 
-export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
+export async function critique(
+  input: CritiqueInput,
+  options: LangChainInvokeOptions = {},
+): Promise<CritiqueResult> {
   const normalizedRequest = input.userRequest.trim();
   if (!normalizedRequest) {
     throw new Error("Critic userRequest cannot be empty.");
@@ -50,17 +56,37 @@ export async function critique(input: CritiqueInput): Promise<CritiqueResult> {
     throw new Error("Critic findings cannot be empty.");
   }
 
-  const critic = createCriticAgent();
-  const result = await critic.invoke(
-    { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings))] },
-    { recursionLimit: getCriticRecursionLimit() },
-  );
+  return runWithLangfuseObservation({
+    name: "critic",
+    input: {
+      userRequest: normalizedRequest,
+      findingsLength: normalizedFindings.length,
+    },
+    task: async () => {
+      const { agent, prompt } = await createCriticAgent();
+      const result = await agent.invoke(
+        { messages: [new HumanMessage(buildCritiquePrompt(normalizedRequest, normalizedFindings))] },
+        {
+          recursionLimit: getCriticRecursionLimit(),
+          callbacks: options.callbacks,
+          metadata: mergeLangfusePromptMetadata(options.metadata, prompt),
+        },
+      );
 
-  if (!("structuredResponse" in result) || result.structuredResponse === undefined) {
-    throw new Error("Critic did not return structured output.");
-  }
+      if (!("structuredResponse" in result) || result.structuredResponse === undefined) {
+        throw new Error("Critic did not return structured output.");
+      }
 
-  return CritiqueResultSchema.parse(result.structuredResponse);
+      return CritiqueResultSchema.parse(result.structuredResponse);
+    },
+    mapOutput: (result) => ({
+      verdict: result.verdict,
+      isFresh: result.isFresh,
+      isComplete: result.isComplete,
+      isWellStructured: result.isWellStructured,
+      revisionRequests: result.revisionRequests,
+    }),
+  });
 }
 
 function buildCritiquePrompt(userRequest: string, findings: string): string {

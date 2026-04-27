@@ -1,8 +1,18 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { MAX_ITERATIONS } from "./config/env";
+import {
+  createLangfuseCallbackHandler,
+  shutdownLangfuseClient,
+} from "./lib/langfuse";
+import { buildCliLangfuseTraceAttributes } from "./lib/langfuse-attributes";
+import {
+  runWithLangfuseRootTrace,
+  shutdownLangfuseObservability,
+} from "./lib/langfuse-runtime";
 import {
   type CompletedSupervisorOutput,
   type PendingWriteReportReview,
@@ -19,8 +29,52 @@ import {
   logResumeDecision,
 } from "./utils/logger";
 
+const CLI_SESSION_ID = randomUUID();
+
+async function runCliTurnWithTracing(userInput: string): Promise<void> {
+  logAgentProcessing();
+
+  const threadId = randomUUID();
+  const traceAttributes = buildCliLangfuseTraceAttributes(CLI_SESSION_ID, threadId);
+  const langfuseHandler = createLangfuseCallbackHandler({
+    userId: traceAttributes.userId,
+    sessionId: traceAttributes.sessionId,
+    tags: traceAttributes.tags,
+    traceMetadata: traceAttributes.metadata,
+  });
+
+  const response = await runWithLangfuseRootTrace({
+    name: "mas-cli-run",
+    input: { userInput, threadId },
+    userId: traceAttributes.userId,
+    sessionId: traceAttributes.sessionId,
+    tags: traceAttributes.tags,
+    metadata: traceAttributes.metadata,
+    task: async () => {
+      const initialResponse = await superviseResearchWithOptions(userInput, {
+        threadId,
+        maxIterations: MAX_ITERATIONS,
+        onProgress: logProgressEvent,
+        callbacks: langfuseHandler ? [langfuseHandler] : undefined,
+      });
+      return resolvePendingReview(cliRef!, initialResponse, threadId, langfuseHandler ? [langfuseHandler] : undefined);
+    },
+    mapOutput: (result) => ({
+      finalAnswer: result.finalAnswer,
+      iterations: result.iterations,
+      wroteReport: result.wroteReport,
+      verdict: result.critique?.verdict ?? null,
+    }),
+  });
+
+  logAgentAnswer(response.finalAnswer);
+}
+
+let cliRef: ReturnType<typeof createInterface> | null = null;
+
 async function main(): Promise<void> {
   const cli = createInterface({ input, output });
+  cliRef = cli;
 
   logCliHeader();
 
@@ -43,16 +97,7 @@ async function main(): Promise<void> {
       }
 
       try {
-        logAgentProcessing();
-        const threadId = randomUUID();
-        const initialResponse = await superviseResearchWithOptions(userInput, {
-          threadId,
-          maxIterations: MAX_ITERATIONS,
-          onProgress: logProgressEvent,
-        });
-        const response = await resolvePendingReview(cli, initialResponse, threadId);
-
-        logAgentAnswer(response.finalAnswer);
+        await runCliTurnWithTracing(userInput);
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Unknown application error.";
@@ -60,7 +105,10 @@ async function main(): Promise<void> {
       }
     }
   } finally {
+    cliRef = null;
     cli.close();
+    await shutdownLangfuseObservability();
+    await shutdownLangfuseClient();
   }
 }
 
@@ -88,6 +136,7 @@ async function resolvePendingReview(
   cli: ReturnType<typeof createInterface>,
   response: Awaited<ReturnType<typeof superviseResearchWithOptions>>,
   threadId: string,
+  callbacks?: BaseCallbackHandler[],
 ): Promise<CompletedSupervisorOutput> {
   let currentResponse = response;
 
@@ -106,6 +155,7 @@ async function resolvePendingReview(
       threadId,
       maxIterations: MAX_ITERATIONS,
       onProgress: logProgressEvent,
+      callbacks,
     });
   }
 

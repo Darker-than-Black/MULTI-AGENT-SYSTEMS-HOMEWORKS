@@ -1,4 +1,5 @@
 import { tool } from "langchain";
+import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { z } from "zod";
 import { critique } from "../agents/critic";
 import { planResearch } from "../agents/planner";
@@ -9,9 +10,16 @@ import { writeReportTool } from "../tools/langchain-tools";
 import type { ProgressLogger } from "../utils/logger";
 
 let progressLogger: ProgressLogger | undefined;
+let langChainCallbacks: BaseCallbackHandler[] | undefined;
 
 export function setSupervisorProgressLogger(logger?: ProgressLogger): void {
   progressLogger = logger;
+}
+
+export function setSupervisorLangChainCallbacks(
+  callbacks?: BaseCallbackHandler[],
+): void {
+  langChainCallbacks = callbacks;
 }
 
 function emitSupervisorProgress(
@@ -32,7 +40,7 @@ export const planResearchTool = tool(
   async ({ userRequest }) => {
     emitSupervisorProgress("planner", "start", "Planner started", userRequest);
     try {
-      const result = await planResearch(userRequest);
+      const result = await planResearch(userRequest, { callbacks: langChainCallbacks });
       emitSupervisorProgress(
         "planner",
         "success",
@@ -72,7 +80,7 @@ export const runResearchTool = tool(
         userRequest,
         plan: normalizedPlan,
         critiqueFeedback,
-      });
+      }, { callbacks: langChainCallbacks });
       emitSupervisorProgress(
         "researcher",
         "success",
@@ -102,7 +110,7 @@ export const critiqueFindingsTool = tool(
   async ({ userRequest, findings }) => {
     emitSupervisorProgress("critic", "start", "Critic started");
     try {
-      const result = await critique({ userRequest, findings });
+      const result = await critique({ userRequest, findings }, { callbacks: langChainCallbacks });
       emitSupervisorProgress(
         "critic",
         "success",

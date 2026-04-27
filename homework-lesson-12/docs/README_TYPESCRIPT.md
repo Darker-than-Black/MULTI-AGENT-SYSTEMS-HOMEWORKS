@@ -29,11 +29,8 @@
 
 Але для lesson 12 ще бракує таких речей:
 
-- у `package.json` ще немає Langfuse JS/TS SDK залежностей;
-- у [src/config/prompts.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/config/prompts.ts) system prompts досі захардкоджені;
-- у рантаймі ще немає trace wrapper для Langfuse;
-- `main.ts` і `main-batch.ts` ще не прокидають `sessionId` / `userId` у Langfuse;
-- online evaluators налаштовуються в UI, але під них треба підготувати коректні traces.
+- online evaluators налаштовуються в UI, але під них треба підготувати коректні traces і вже стабільні prompts;
+- треба зібрати фінальні submission assets: traces, sessions, prompts, scores.
 
 ---
 
@@ -116,7 +113,7 @@ src/
 ```env
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
 Що треба зробити в TypeScript:
@@ -221,25 +218,36 @@ await startActiveObservation("supervisor-run", async () => {
 
 Поточний стан:
 
-- у [src/config/prompts.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/config/prompts.ts) є:
-  - `SUPERVISOR_SYSTEM_PROMPT`
-  - `PLANNER_SYSTEM_PROMPT`
-  - `RESEARCH_AGENT_SYSTEM_PROMPT`
-  - `CRITIC_SYSTEM_PROMPT`
+- у [src/config/prompts.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/config/prompts.ts) лишився тільки metadata registry `key -> prompt name/type/required variables`;
+- runtime loader вже існує в [src/lib/langfuse-prompts.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/lib/langfuse-prompts.ts) і робить `client.prompt.get(..., { label: "production" })`;
+- локальний prompt text і fallback path прибрані з runtime-коду;
+- prompts уже існують у Langfuse з label `production`, а runtime path підтверджений без `Prompt not found` warning для `plan` route.
 
-Для lesson 12 їх треба винести в Langfuse як окремі prompts, наприклад:
+Поточний inventory:
 
-- `supervisor-system`
-- `planner-system`
-- `researcher-system`
-- `critic-system`
+- `homework-12/supervisor-system`
+  - type: `text`
+  - variables: `{{max_research_revisions}}`
+  - consumer: [src/supervisor/create-supervisor.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/supervisor/create-supervisor.ts)
+- `homework-12/planner-system`
+  - type: `text`
+  - variables: none
+  - consumer: [src/agents/planner.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/agents/planner.ts)
+- `homework-12/researcher-system`
+  - type: `text`
+  - variables: none
+  - consumers: [src/agents/researcher.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/agents/researcher.ts), [src/agent/memory.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/agent/memory.ts)
+- `homework-12/critic-system`
+  - type: `text`
+  - variables: none
+  - consumer: [src/agents/critic.ts](/Users/demon/Desktop/mas/MULTI-AGENT-SYSTEMS-HOMEWORKS/homework-lesson-12/src/agents/critic.ts)
 
 Рекомендований підхід:
 
-1. Створити prompts у Langfuse UI з label `production`.
-2. Додати в код thin service, який робить `langfuse.prompt.get(...)`.
-3. Для текстових prompts використовувати `prompt.compile({...})`.
-4. Якщо prompt використовується через LangChain template, можна трансформувати його через `getLangchainPrompt()`.
+1. Підтримувати всі 4 prompts напряму в Langfuse UI або через зовнішній API workflow.
+2. Для всіх робочих версій мати label `production`.
+3. Для `supervisor` використовувати `prompt.compile({ max_research_revisions })`.
+4. Для `planner`, `researcher`, `critic` використовувати прямий текстовий prompt без додаткової параметризації.
 
 Приклад для JS/TS SDK:
 
@@ -248,19 +256,21 @@ import { LangfuseClient } from "@langfuse/client";
 
 const langfuse = new LangfuseClient();
 
-const plannerPrompt = await langfuse.prompt.get("planner-system");
-const compiledPlannerPrompt = plannerPrompt.compile({
-  revision_limit: 2,
+const supervisorPrompt = await langfuse.prompt.get("homework-12/supervisor-system", {
+  label: "production",
+});
+const compiledSupervisorPrompt = supervisorPrompt.compile({
+  max_research_revisions: "2",
 });
 ```
 
 Для цього конкретного кодбейсу найпростіше:
 
-- залишити `src/config/prompts.ts` як adapter layer;
-- замінити hardcoded string constants на async loaders;
-- агенти мають отримувати вже compiled prompt text.
+- залишити `src/config/prompts.ts` лише як metadata registry;
+- не дублювати новий naming окремо в коді, бо він уже зафіксований у `SYSTEM_PROMPT_DEFINITIONS`;
+- агенти мають отримувати вже resolved/compiled prompt text із `resolveSystemPrompt(...)`.
 
-Після міграції важливо, щоб у `src/config/prompts.ts` не лишився другий, реальний source of truth для prompt-контенту.
+Після міграції важливо, щоб у `src/config/prompts.ts` не лишався жоден локальний дубль prompt-контенту.
 
 ---
 

@@ -1,9 +1,22 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
+import type { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { MAX_ITERATIONS } from "./config/env";
 import { planResearch } from "./agents/planner";
 import { research, type ResearchInput } from "./agents/researcher";
 import { critique, type CritiqueInput } from "./agents/critic";
+import {
+  createLangfuseCallbackHandler,
+  shutdownLangfuseClient,
+} from "./lib/langfuse";
+import {
+  type LangfuseTraceAttributes,
+  buildBatchLangfuseTraceAttributes,
+} from "./lib/langfuse-attributes";
+import {
+  runWithLangfuseRootTrace,
+  shutdownLangfuseObservability,
+} from "./lib/langfuse-runtime";
 import { knowledgeSearch } from "./tools/knowledge-search";
 import {
   superviseResearchWithOptions,
@@ -54,18 +67,35 @@ function writeResult(result: Record<string, unknown>): void {
   process.stdout.write(JSON.stringify(result) + "\n");
 }
 
-async function runFull(userRequest: string): Promise<Record<string, unknown>> {
+function buildBatchCallbacks(
+  traceAttributes: LangfuseTraceAttributes,
+): BaseCallbackHandler[] | undefined {
+  const handler = createLangfuseCallbackHandler({
+    userId: traceAttributes.userId,
+    sessionId: traceAttributes.sessionId,
+    tags: traceAttributes.tags,
+    traceMetadata: traceAttributes.metadata,
+  });
+
+  return handler ? [handler] : undefined;
+}
+
+async function runFull(
+  userRequest: string,
+  callbacks?: BaseCallbackHandler[],
+): Promise<Record<string, unknown>> {
   const threadId = randomUUID();
 
   let result = await superviseResearchWithOptions(userRequest, {
     threadId,
     maxIterations: MAX_ITERATIONS,
+    callbacks,
   });
 
   if (result.status === "interrupted") {
     result = await resumeSupervisorWithOptions(
       { type: "approve" },
-      { threadId, maxIterations: MAX_ITERATIONS },
+      { threadId, maxIterations: MAX_ITERATIONS, callbacks },
     );
   }
 
@@ -79,8 +109,11 @@ async function runFull(userRequest: string): Promise<Record<string, unknown>> {
   };
 }
 
-async function runPlan(userRequest: string): Promise<Record<string, unknown>> {
-  const plan = await planResearch(userRequest);
+async function runPlan(
+  userRequest: string,
+  callbacks?: BaseCallbackHandler[],
+): Promise<Record<string, unknown>> {
+  const plan = await planResearch(userRequest, { callbacks });
   return { plan };
 }
 
@@ -88,18 +121,20 @@ async function runResearch(
   userRequest: string,
   plan: ResearchPlan,
   critiqueFeedback?: string[],
+  callbacks?: BaseCallbackHandler[],
 ): Promise<Record<string, unknown>> {
   const input: ResearchInput = { userRequest, plan, critiqueFeedback };
-  const findings = await research(input);
+  const findings = await research(input, { callbacks });
   return { findings };
 }
 
 async function runCritique(
   userRequest: string,
   findings: string,
+  callbacks?: BaseCallbackHandler[],
 ): Promise<Record<string, unknown>> {
   const input: CritiqueInput = { userRequest, findings };
-  const result = await critique(input);
+  const result = await critique(input, { callbacks });
   return { critique: result };
 }
 
@@ -129,58 +164,69 @@ async function main(): Promise<void> {
 
   try {
     let output: Record<string, unknown>;
+    const requestId = randomUUID();
+    const traceAttributes = buildBatchLangfuseTraceAttributes(mode, requestId);
+    const callbacks = buildBatchCallbacks(traceAttributes);
 
-    switch (mode) {
-      case "full": {
-        if (!request.userRequest) {
-          throw new Error("mode=full requires userRequest.");
+    output = await runWithLangfuseRootTrace({
+      name: `mas-batch-${mode}`,
+      input: request,
+      userId: traceAttributes.userId,
+      sessionId: traceAttributes.sessionId,
+      tags: traceAttributes.tags,
+      metadata: traceAttributes.metadata,
+      task: async () => {
+        switch (mode) {
+          case "full": {
+            if (!request.userRequest) {
+              throw new Error("mode=full requires userRequest.");
+            }
+            return runFull(request.userRequest, callbacks);
+          }
+
+          case "plan": {
+            if (!request.userRequest) {
+              throw new Error("mode=plan requires userRequest.");
+            }
+            return runPlan(request.userRequest, callbacks);
+          }
+
+          case "research": {
+            if (!request.userRequest) throw new Error("mode=research requires userRequest.");
+            if (!request.plan) throw new Error("mode=research requires plan.");
+            return runResearch(request.userRequest, request.plan, request.critiqueFeedback, callbacks);
+          }
+
+          case "critique": {
+            if (!request.userRequest) throw new Error("mode=critique requires userRequest.");
+            if (!request.findings) throw new Error("mode=critique requires findings.");
+            return runCritique(request.userRequest, request.findings, callbacks);
+          }
+
+          case "knowledge_search": {
+            if (!request.query) throw new Error("mode=knowledge_search requires query.");
+            return runKnowledgeSearch(request.query);
+          }
+
+          default: {
+            throw new Error(`Unknown mode: ${mode as string}. Supported: full, plan, research, critique, knowledge_search.`);
+          }
         }
-        output = await runFull(request.userRequest);
-        break;
-      }
-
-      case "plan": {
-        if (!request.userRequest) {
-          throw new Error("mode=plan requires userRequest.");
-        }
-        output = await runPlan(request.userRequest);
-        break;
-      }
-
-      case "research": {
-        if (!request.userRequest) throw new Error("mode=research requires userRequest.");
-        if (!request.plan) throw new Error("mode=research requires plan.");
-        output = await runResearch(request.userRequest, request.plan, request.critiqueFeedback);
-        break;
-      }
-
-      case "critique": {
-        if (!request.userRequest) throw new Error("mode=critique requires userRequest.");
-        if (!request.findings) throw new Error("mode=critique requires findings.");
-        output = await runCritique(request.userRequest, request.findings);
-        break;
-      }
-
-      case "knowledge_search": {
-        if (!request.query) throw new Error("mode=knowledge_search requires query.");
-        output = await runKnowledgeSearch(request.query);
-        break;
-      }
-
-      default: {
-        throw new Error(`Unknown mode: ${mode as string}. Supported: full, plan, research, critique, knowledge_search.`);
-      }
-    }
+      },
+    });
 
     writeResult({ success: true, mode, ...output });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown batch error.";
     writeResult({ success: false, error: message });
     process.exitCode = 1;
+  } finally {
+    await shutdownLangfuseObservability();
+    await shutdownLangfuseClient();
   }
 }
 
-main().catch((error: unknown) => {
+main().catch(async (error: unknown) => {
   const message = error instanceof Error ? error.message : "Unknown fatal error.";
   writeResult({ success: false, error: message });
   process.exitCode = 1;

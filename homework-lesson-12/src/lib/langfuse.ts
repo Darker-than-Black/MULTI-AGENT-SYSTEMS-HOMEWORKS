@@ -51,6 +51,17 @@ export function getLangfuseClient(): LangfuseClient | null {
   return cachedLangfuseClient;
 }
 
+export async function shutdownLangfuseClient(): Promise<void> {
+  if (!cachedLangfuseClient) {
+    cachedLangfuseClient = undefined;
+    return;
+  }
+
+  const client = cachedLangfuseClient;
+  cachedLangfuseClient = undefined;
+  await client.shutdown();
+}
+
 export function createLangfuseCallbackHandler(
   params: LangfuseCallbackHandlerParams = {},
 ): CallbackHandler | null {

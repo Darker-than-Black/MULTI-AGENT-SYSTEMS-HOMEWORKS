@@ -113,7 +113,7 @@ const fakeModel = new FakeToolCallingModel({
   ],
 });
 
-const supervisor = createSupervisorAgent({
+const { agent: supervisor } = await createSupervisorAgent({
   model: fakeModel,
   tools: fakeSupervisorTools,
 });

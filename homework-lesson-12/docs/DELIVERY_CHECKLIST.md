@@ -95,16 +95,20 @@ Definition of done:
 
 Goal: кожен запуск MAS має створювати один top-level trace з повним деревом дочірніх викликів.
 
-- [ ] Обгорнути `main.ts` у top-level Langfuse trace/span.
-- [ ] Обгорнути `main-batch.ts` у top-level Langfuse trace/span.
-- [ ] Використати `propagateAttributes(...)` на старті workflow.
-- [ ] Передавати Langfuse callbacks у LangChain/LangGraph invoke path.
-- [ ] Переконатися, що trace не створюється занадто пізно, вже після першого LLM/tool call.
+- [x] Обгорнути `main.ts` у top-level Langfuse trace/span.
+- [x] Обгорнути `main-batch.ts` у top-level Langfuse trace/span.
+- [x] Використати `propagateAttributes(...)` на старті workflow.
+- [x] Передавати Langfuse callbacks у LangChain/LangGraph invoke path.
+- [x] Переконатися, що trace не створюється занадто пізно, вже після першого LLM/tool call.
 
 Definition of done:
 
-- [ ] Один user request = один trace у Langfuse.
-- [ ] Усередині trace видно Supervisor, agent, tool, model виклики як єдине дерево.
+- [x] Один user request = один trace у Langfuse.
+- [x] Усередині trace видно Supervisor, agent, tool, model виклики як єдине дерево.
+
+Pending verification:
+
+- [x] Ручно перевірити Langfuse UI після реальних запусків і підтвердити, що root trace та дочірні spans справді з’являються як очікується.
 
 ---
 
@@ -112,16 +116,26 @@ Definition of done:
 
 Goal: жоден критичний агентний виклик не випадає з tracing coverage.
 
-- [ ] Підключити callback handler до Supervisor invoke path.
-- [ ] Перевірити Planner invoke path.
-- [ ] Перевірити Researcher invoke path.
-- [ ] Перевірити Critic invoke path.
-- [ ] Перевірити, що tool calls також відображаються у trace.
-- [ ] Перевірити, що HITL interrupt/resume не розриває trace context.
+- [x] Підключити callback handler до Supervisor invoke path.
+- [x] Перевірити Planner invoke path.
+- [x] Перевірити Researcher invoke path.
+- [x] Перевірити Critic invoke path.
+- [x] Перевірити, що tool calls також відображаються у trace.
+- [x] Перевірити, що HITL interrupt/resume не розриває trace context.
 
 Definition of done:
 
-- [ ] Trace tree містить повну послідовність `plan -> research -> critique -> write`.
+- [x] Trace tree містить повну послідовність `plan -> research -> critique -> write`.
+
+Verification notes:
+
+- `main.ts` і `main-batch.ts` прокидають Langfuse callbacks у top-level workflow.
+- `superviseResearchWithOptions(...)` і `resumeSupervisorWithOptions(...)` приймають callbacks і передають їх далі в Supervisor invoke path.
+- `planResearch`, `research`, `runResearchTurn` і `critique` приймають `LangChainInvokeOptions` і використовують `callbacks` у `agent.invoke(...)`.
+- `supervisor-tools.ts` прокидує callbacks у Planner / Researcher / Critic wrappers.
+- Ручна перевірка в Langfuse UI вже показала root trace, `AGENT`, `GENERATION`, `TOOL`, `ChatOpenAI`, `LangGraph`, `knowledge_search`.
+- Додатковий `mode=full` batch run підтвердив, що callback-enabled flow реально доходить до `supervisor`, `planner`, `researcher`, `critic`.
+- Prompt Management blocker для callback coverage знято після sync у Langfuse; tracing тепер можна перевіряти без fallback warning як окрему наступну фазу.
 
 ---
 
@@ -129,22 +143,33 @@ Definition of done:
 
 Goal: traces мають коректну атрибуцію на рівні session і user.
 
-- [ ] Визначити правило для `sessionId`.
-- [ ] Визначити правило для `userId`.
-- [ ] Визначити мінімальний набір `tags`.
-- [ ] Прокинути ці атрибути через `propagateAttributes(...)`.
-- [ ] Переконатися, що той самий `sessionId` зберігається під час HITL resume flow.
+- [x] Визначити правило для `sessionId`.
+- [x] Визначити правило для `userId`.
+- [x] Визначити мінімальний набір `tags`.
+- [x] Прокинути ці атрибути через `propagateAttributes(...)`.
+- [x] Переконатися, що той самий `sessionId` зберігається під час HITL resume flow.
 
-Рекомендований стартовий mapping:
+Затверджений mapping:
 
-- `sessionId`: або стабільний CLI session id, або узгоджений runtime id
-- `userId`: технічний локальний user id
-- `tags`: `homework-12`, `cli`, `batch`, `rag`
+- `CLI sessionId`: один стабільний `randomUUID()` на весь lifecycle CLI-процесу, щоб кілька user turns групувалися в одну Langfuse session.
+- `CLI userId`: `local-cli-user`.
+- `CLI tags`: `homework-12`, `runtime:cli`.
+- `Batch sessionId`: `requestId`, тобто окрема session на кожен batch run.
+- `Batch userId`: `local-batch-user`.
+- `Batch tags`: `homework-12`, `runtime:batch`, `mode:<batch-mode>`.
 
 Definition of done:
 
-- [ ] У Langfuse `Sessions` видно згруповані traces.
-- [ ] У Langfuse `Users` видно user, який породив traces.
+- [x] У Langfuse `Sessions` видно згруповані traces.
+- [x] У Langfuse `Users` видно user, який породив traces.
+
+Verification notes:
+
+- Mapping винесено в `src/lib/langfuse-attributes.ts`, щоб `sessionId`, `userId`, `tags` і trace metadata не дублювалися в entrypoints.
+- `main.ts` використовує один `CLI_SESSION_ID` для всіх turn'ів поточного CLI runtime і прокидує атрибути як у root trace, так і в LangChain callback handler.
+- `main-batch.ts` створює окремий `sessionId` на кожен batch request і додає mode-specific tag у форматі `mode:<batch-mode>`.
+- `runWithLangfuseRootTrace(...)` викликає `propagateAttributes(...)` рано, до першого supervisor / agent / tool / model call.
+- Під час CLI HITL resume використовується той самий `callbacks` array, а отже той самий `sessionId`, `userId` і набір tags не губляться всередині review flow.
 
 ---
 
@@ -152,21 +177,50 @@ Definition of done:
 
 Goal: підготувати всі agent prompts до міграції в Langfuse Prompt Management.
 
-- [ ] Зібрати повний список system prompts у коді.
-- [ ] Перевірити, які з них статичні, а які потребують template variables.
-- [ ] Визначити назви prompts у Langfuse.
-- [ ] Зафіксувати, які поля потрібно параметризувати через `compile(...)`.
+- [x] Зібрати повний список system prompts у коді.
+- [x] Перевірити, які з них статичні, а які потребують template variables.
+- [x] Визначити назви prompts у Langfuse.
+- [x] Зафіксувати, які поля потрібно параметризувати через `compile(...)`.
 
 Мінімальний inventory:
 
-- [ ] `supervisor-system`
-- [ ] `planner-system`
-- [ ] `researcher-system`
-- [ ] `critic-system`
+- [x] `supervisor-system`
+- [x] `planner-system`
+- [x] `researcher-system`
+- [x] `critic-system`
 
 Definition of done:
 
-- [ ] Є повна мапа: prompt у коді -> prompt name у Langfuse.
+- [x] Є повна мапа: prompt у коді -> prompt name у Langfuse.
+
+Inventory map:
+
+- `SYSTEM_PROMPT_DEFINITIONS.supervisor` in `src/config/prompts.ts`
+  - Langfuse name: `homework-12/supervisor-system`
+  - Type: `text`
+  - Variables for `compile(...)`: `max_research_revisions`
+  - Runtime consumers: `src/supervisor/create-supervisor.ts`
+- `SYSTEM_PROMPT_DEFINITIONS.planner` in `src/config/prompts.ts`
+  - Langfuse name: `homework-12/planner-system`
+  - Type: `text`
+  - Variables for `compile(...)`: none
+  - Runtime consumers: `src/agents/planner.ts`
+- `SYSTEM_PROMPT_DEFINITIONS.researcher` in `src/config/prompts.ts`
+  - Langfuse name: `homework-12/researcher-system`
+  - Type: `text`
+  - Variables for `compile(...)`: none
+  - Runtime consumers: `src/agents/researcher.ts`, `src/agent/memory.ts`
+- `SYSTEM_PROMPT_DEFINITIONS.critic` in `src/config/prompts.ts`
+  - Langfuse name: `homework-12/critic-system`
+  - Type: `text`
+  - Variables for `compile(...)`: none
+  - Runtime consumers: `src/agents/critic.ts`
+
+Verification notes:
+
+- Runtime metadata registry exists in `src/config/prompts.ts` as `SYSTEM_PROMPT_DEFINITIONS`.
+- Runtime loading path resolves prompts through `src/lib/langfuse-prompts.ts` with `label: "production"`.
+- Only the `supervisor` prompt currently requires template variables. The other three prompts are static text prompts and can be migrated directly without extra preprocessing.
 
 ---
 
@@ -174,19 +228,33 @@ Definition of done:
 
 Goal: system prompts більше не є hardcoded source of truth у TypeScript.
 
-- [ ] Створити prompts у Langfuse UI.
-- [ ] Додати label `production` для робочих версій.
-- [ ] Реалізувати в коді prompt loader через Langfuse JS/TS SDK.
-- [ ] Замінити пряме використання prompt constants на Langfuse-backed loading.
-- [ ] Якщо потрібні змінні, підключити `prompt.compile({...})`.
-- [ ] Якщо використовуються LangChain templates, за потреби застосувати `getLangchainPrompt()`.
-- [ ] Залишити в коді лише fallback або adapter logic, але не дублювати реальний source of truth.
+- [x] Створити prompts у Langfuse UI.
+- [x] Додати label `production` для робочих версій.
+- [x] Реалізувати в коді prompt loader через Langfuse JS/TS SDK.
+- [x] Замінити пряме використання prompt constants на Langfuse-backed loading.
+- [x] Якщо потрібні змінні, підключити `prompt.compile({...})`.
+- [x] Якщо використовуються LangChain templates, за потреби застосувати `getLangchainPrompt()`.
+- [x] Залишити в коді лише adapter logic, без локального prompt content fallback.
 
 Definition of done:
 
-- [ ] У Langfuse UI видно всі prompts.
-- [ ] Runtime реально завантажує prompts із Langfuse.
-- [ ] У коді немає робочих hardcoded system prompts як основного джерела.
+- [x] У Langfuse UI видно всі prompts.
+- [x] Runtime реально завантажує prompts із Langfuse.
+- [x] У коді немає робочих hardcoded system prompts як основного джерела.
+
+Verification notes:
+
+- Runtime loader already uses `client.prompt.get(name, { label: "production" })` in `src/lib/langfuse-prompts.ts`.
+- The four production prompts already exist in Langfuse:
+  - `homework-12/researcher-system`
+  - `homework-12/planner-system`
+  - `homework-12/critic-system`
+  - `homework-12/supervisor-system`
+- Strict runtime verification succeeded:
+  - `mode=plan` batch run completed without `Prompt not found` warnings.
+  - Direct `resolveSystemPrompt("supervisor", { max_research_revisions: "2" })` returned `isFallback: false` and prompt `version: 1`.
+- `src/config/prompts.ts` now contains metadata only: prompt names, types, and required variables.
+- Full prompt text and local fallback content were removed from the codebase; Langfuse `production` prompts are the only operational source.
 
 ---
 

@@ -11,7 +11,12 @@ import {
   getResearchWorkflowRecursionLimit,
 } from "../config/agent-policy";
 import { MODEL_NAME, OPENAI_API_KEY, TEMPERATURE } from "../config/env";
-import { RESEARCH_AGENT_SYSTEM_PROMPT } from "../config/prompts";
+import {
+  mergeLangfusePromptMetadata,
+  type LangChainInvokeOptions,
+} from "../lib/langfuse-context";
+import { resolveSystemPrompt } from "../lib/langfuse-prompts";
+import { runWithLangfuseObservation } from "../lib/langfuse-runtime";
 import type { ResearchPlan } from "../schemas/research-plan";
 import {
   githubGetFileContentTool,
@@ -28,26 +33,21 @@ export interface ResearchInput {
   critiqueFeedback?: string[];
 }
 
-let researcherAgent: ReturnType<typeof createAgent> | null = null;
-
-export function createResearcherAgent() {
-  if (researcherAgent) {
-    return researcherAgent;
-  }
-
+export async function createResearcherAgent() {
   if (!OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is missing. Add it to homework-lesson-8/.env.");
   }
 
+  const systemPrompt = await resolveSystemPrompt("researcher");
   const model = new ChatOpenAI({
     model: MODEL_NAME,
     temperature: TEMPERATURE,
     apiKey: OPENAI_API_KEY,
   });
 
-  researcherAgent = createAgent({
+  const agent = createAgent({
     model,
-    systemPrompt: RESEARCH_AGENT_SYSTEM_PROMPT.trim(),
+    systemPrompt: systemPrompt.content.trim(),
     tools: [
       webSearchTool,
       readUrlTool,
@@ -57,62 +57,105 @@ export function createResearcherAgent() {
     ],
   });
 
-  return researcherAgent;
+  return {
+    agent,
+    prompt: systemPrompt.prompt,
+  };
 }
 
-export async function research(input: ResearchInput): Promise<string> {
+export async function research(
+  input: ResearchInput,
+  options: LangChainInvokeOptions = {},
+): Promise<string> {
   const normalizedUserRequest = input.userRequest.trim();
   if (!normalizedUserRequest) {
     throw new Error("Researcher userRequest cannot be empty.");
   }
 
-  const researcher = createResearcherAgent();
-  const recursionLimit = getResearchWorkflowRecursionLimit(input.plan.searchQueries.length);
-  const result = await researcher.invoke(
-    { messages: [new HumanMessage(buildResearchPrompt(input))] },
-    { recursionLimit },
-  );
+  return runWithLangfuseObservation({
+    name: "researcher",
+    input: {
+      userRequest: normalizedUserRequest,
+      goal: input.plan.goal,
+      searchQueries: input.plan.searchQueries,
+      sourcesToCheck: input.plan.sourcesToCheck,
+      critiqueFeedback: input.critiqueFeedback ?? [],
+    },
+    task: async () => {
+      const { agent, prompt } = await createResearcherAgent();
+      const recursionLimit = getResearchWorkflowRecursionLimit(input.plan.searchQueries.length);
+      const result = await agent.invoke(
+        { messages: [new HumanMessage(buildResearchPrompt(input))] },
+        {
+          recursionLimit,
+          callbacks: options.callbacks,
+          metadata: mergeLangfusePromptMetadata(options.metadata, prompt),
+        },
+      );
 
-  const lastMessage = result.messages.at(-1);
-  const finalAnswer = lastMessage ? stringifyMessageContent(lastMessage.content).trim() : "";
-  return finalAnswer || "Researcher returned an empty response.";
+      const lastMessage = result.messages.at(-1);
+      const finalAnswer = lastMessage ? stringifyMessageContent(lastMessage.content).trim() : "";
+      return finalAnswer || "Researcher returned an empty response.";
+    },
+  });
 }
 
 export async function runResearchTurn(
   { maxIterations, memory, userInput }: RunAgentTurnInput,
+  options: LangChainInvokeOptions = {},
 ): Promise<RunAgentTurnOutput> {
   await appendUserMessage(memory, userInput);
 
-  const researcher = createResearcherAgent();
-  const startIndex = memory.length;
-  // Multi-tool runs can require several AI -> tool -> observation cycles per user request.
-  const recursionLimit = getResearchTurnRecursionLimit(maxIterations);
-  const result = await researcher.invoke(
-    { messages: memory },
-    { recursionLimit },
-  );
+  return runWithLangfuseObservation({
+    name: "researcher-turn",
+    input: {
+      userInput,
+      maxIterations,
+      memoryLength: memory.length,
+    },
+    task: async () => {
+      const { agent, prompt } = await createResearcherAgent();
+      const startIndex = memory.length;
+      // Multi-tool runs can require several AI -> tool -> observation cycles per user request.
+      const recursionLimit = getResearchTurnRecursionLimit(maxIterations);
+      const result = await agent.invoke(
+        { messages: memory },
+        {
+          recursionLimit,
+          callbacks: options.callbacks,
+          metadata: mergeLangfusePromptMetadata(options.metadata, prompt),
+        },
+      );
 
-  const generatedMessages = result.messages.slice(startIndex);
-  const assistantMessages = generatedMessages.filter(
-    (message: typeof generatedMessages[number]) => message.getType() === "ai",
-  );
-  const toolMessages = generatedMessages.filter(
-    (message: typeof generatedMessages[number]) => message.getType() === "tool",
-  );
+      const generatedMessages = result.messages.slice(startIndex);
+      const assistantMessages = generatedMessages.filter(
+        (message: typeof generatedMessages[number]) => message.getType() === "ai",
+      );
+      const toolMessages = generatedMessages.filter(
+        (message: typeof generatedMessages[number]) => message.getType() === "tool",
+      );
 
-  const lastAssistant = assistantMessages.at(-1);
-  const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
-  const normalizedFinal = finalAnswer || "Agent returned an empty response.";
+      const lastAssistant = assistantMessages.at(-1);
+      const finalAnswer = lastAssistant ? stringifyMessageContent(lastAssistant.content).trim() : "";
+      const normalizedFinal = finalAnswer || "Agent returned an empty response.";
 
-  await appendAssistantMessage(memory, normalizedFinal);
+      await appendAssistantMessage(memory, normalizedFinal);
 
-  return {
-    finalAnswer: normalizedFinal,
-    messages: memory,
-    iterations: assistantMessages.length || 1,
-    wroteReport: didWriteReport(toolMessages),
-    toolExecutions: buildToolExecutionTrace(generatedMessages),
-  };
+      return {
+        finalAnswer: normalizedFinal,
+        messages: memory,
+        iterations: assistantMessages.length || 1,
+        wroteReport: didWriteReport(toolMessages),
+        toolExecutions: buildToolExecutionTrace(generatedMessages),
+      };
+    },
+    mapOutput: (result) => ({
+      finalAnswer: result.finalAnswer,
+      iterations: result.iterations,
+      wroteReport: result.wroteReport,
+      toolExecutions: result.toolExecutions,
+    }),
+  });
 }
 
 function buildResearchPrompt(input: ResearchInput): string {
