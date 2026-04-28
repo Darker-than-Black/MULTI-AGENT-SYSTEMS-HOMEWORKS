@@ -262,16 +262,33 @@ Verification notes:
 
 Goal: перевірити, що traces не просто існують, а дійсно корисні для observability.
 
-- [ ] Запустити мінімум 3 різні user requests.
-- [ ] Перевірити, що кожен запуск створює окремий trace.
-- [ ] Перевірити, що trace name осмислений і стабільний.
-- [ ] Перевірити, що input/output trace читаються в UI.
-- [ ] Перевірити, що tool calls і LLM spans відображаються всередині дерева.
-- [ ] Перевірити, що хоча б один trace проходить через HITL write_report flow.
+- [x] Запустити мінімум 3 різні user requests.
+- [x] Перевірити, що кожен запуск створює окремий trace.
+- [x] Перевірити, що trace name осмислений і стабільний.
+- [x] Перевірити, що input/output trace читаються в UI.
+- [x] Перевірити, що tool calls і LLM spans відображаються всередині дерева.
+- [x] Перевірити, що хоча б один trace проходить через HITL write_report flow.
 
 Definition of done:
 
-- [ ] У `Tracing -> Traces` видно 3-5 якісних traces, придатних для аналізу та evaluation.
+- [x] У `Tracing -> Traces` видно 3-5 якісних traces, придатних для аналізу та evaluation.
+
+Verification notes:
+
+- `2026-04-28T07:12:08Z` -> `2026-04-28T07:16:25Z`: виконано 3 нові `mode=full` batch runs для різних user requests.
+- Langfuse CLI підтвердив 3 окремі traces:
+  - `bb5cabf8b435c009c10b359cc4cfa763`
+  - `bbd5e0ca19bd9e2d87ab104b34379d54`
+  - `a853facd9d01e41679e9da99c4d85040`
+- Усі 3 traces мають стабільний trace name `mas-batch-full`, user `local-batch-user` і різні `sessionId`.
+- `input` і `output` читаються на рівні trace:
+  - trace input містить `mode` і `userRequest`
+  - trace output містить `finalAnswer`, `plan`, `critique`, `toolExecutions`, `wroteReport`, `iterations`
+- Через `observations list --trace-id ...` підтверджено повноцінне дерево observation'ів:
+  - присутні `AGENT`, `TOOL`, `GENERATION`, `SPAN`
+  - присутні `ChatOpenAI`, `supervisor`, `planner`, `researcher`, `critic`
+  - присутні tool observations `plan_research`, `run_research`, `critique_findings`, `write_report`
+- Для trace `bbd5e0ca19bd9e2d87ab104b34379d54` окремо підтверджено `HumanInTheLoopMiddleware.after_model` разом із `write_report`, тобто trace реально проходить через HITL write-report flow.
 
 ---
 
@@ -279,21 +296,61 @@ Definition of done:
 
 Goal: увімкнути автоматичну оцінку нових traces у Langfuse.
 
-- [ ] Визначити 2-3 найбільш корисні критерії оцінки для цієї MAS.
-- [ ] Створити мінімум 2 evaluator'и в Langfuse UI.
-- [ ] Вибрати різні `score type`, якщо це доречно.
-- [ ] Налаштувати evaluator prompts через `{{input}}` і `{{output}}`.
-- [ ] Переконатися, що evaluator'и запускаються саме на потрібних traces.
+- [x] Визначити 2-3 найбільш корисні критерії оцінки для цієї MAS.
+- [x] Створити мінімум 2 evaluator'и в Langfuse UI.
+- [x] Вибрати різні `score type`, якщо це доречно.
+- [x] Налаштувати evaluator prompts через `{{input}}` і `{{output}}`.
+- [x] Переконатися, що evaluator'и запускаються саме на потрібних traces.
 
 Рекомендовані evaluator'и:
 
-- [ ] `answer_relevance`
+- [x] `answer_relevance`
 - [ ] `groundedness`
-- [ ] `report_structure` або `completeness`
+- [x] `report_structure` або `completeness`
 
 Definition of done:
 
-- [ ] Нові traces автоматично отримують evaluator scores.
+- [x] Нові traces автоматично отримують evaluator scores.
+
+Verification notes:
+
+- Для Langfuse evaluation runtime створено project-level `LLM connection`:
+  - provider: `openai`
+  - adapter: `openai`
+  - created at: `2026-04-28T08:02:49.890Z`
+- Створено 2 project-owned custom evaluators з різними score types:
+  - `homework-12-answer-relevance`
+    - evaluator id: `cmoicbl7i00zvad074nkupoyu`
+    - score type: `NUMERIC`
+    - variables: `input`, `output`
+    - model: `openai / gpt-4o-mini`
+  - `homework-12-report-structure`
+    - evaluator id: `cmoice6id00gnad078dn4a90j`
+    - active version: `2`
+    - score type: `BOOLEAN`
+    - variables: `input`, `output`
+    - model: `openai / gpt-4o-mini`
+- Обидва evaluator prompts побудовані на `{{input}}` і `{{output}}`, без зайвих runtime-залежностей:
+  - `answer_relevance` оцінює, наскільки фінальна відповідь прямо і достатньо закриває user request
+  - `report_structure` дає boolean verdict, чи відповідь структурно delivery-ready
+- Створено 2 active live evaluation rules:
+  - `homework-12-answer-relevance-live`
+    - rule id: `cmoicg3hs01agad08z7daa1oh`
+    - target: `observation`
+    - status: `active`
+  - `homework-12-report-structure-live`
+    - rule id: `cmoicg1yv00xlad0864sfsywp`
+    - target: `observation`
+    - status: `active`
+- Обидва rules навмисно таргетують не весь trace, а фінальний `supervisor` observation всередині потрібних traces:
+  - `traceName any of ["mas-batch-full"]`
+  - `name any of ["supervisor"]`
+  - `type any of ["AGENT"]`
+- Variable mapping для обох rules:
+  - `input <- observation.input` via `$.userRequest`
+  - `output <- observation.output` via `$.finalAnswer`
+- Це дає observation-level live evaluation саме на фінальному supervisor result у batch traces, які ми використовуємо для verification.
+- Важливо: Langfuse evaluation rules не роблять historical backfill автоматично. Фактичне надходження scores на нові traces перевіряється окремо в `Block 10`.
 
 ---
 
@@ -301,15 +358,34 @@ Definition of done:
 
 Goal: переконатися, що online evaluation справді спрацював після runtime запусків.
 
-- [ ] Зробити 3-5 нових запусків уже після налаштування evaluator'ів.
-- [ ] Дочекатися асинхронної обробки Langfuse.
-- [ ] Відкрити trace details і перевірити вкладку `Scores`.
-- [ ] Перевірити, що evaluator status показує оброблені traces.
-- [ ] Перевірити, що scores виглядають логічно, а не випадково.
+- [x] Зробити 3-5 нових запусків уже після налаштування evaluator'ів.
+- [x] Дочекатися асинхронної обробки Langfuse.
+- [x] Відкрити trace details і перевірити вкладку `Scores`.
+- [x] Перевірити, що evaluator status показує оброблені traces.
+- [x] Перевірити, що scores виглядають логічно, а не випадково.
 
 Definition of done:
 
-- [ ] У кожного потрібного trace є автоматично проставлені scores.
+- [x] У кожного потрібного trace є автоматично проставлені scores.
+
+Verification notes:
+
+- `2026-04-28T08:48:34Z` -> `2026-04-28T08:52:11Z`: виконано 3 нові `mode=full` batch runs уже після активації live evaluation rules.
+- Production traces, використані для перевірки:
+  - `bd312bb0a061123d9a0a970e37bee41b`
+  - `d8d1ef6e4eeb15a73045794cc9e8816e`
+  - `755888c29aa33b1a2f7be9819cf9ca52`
+- Для цих запусків підтверджені різні `sessionId`, а trace name лишився стабільним: `mas-batch-full`.
+- Після запусків витримано окремий async wait і перевірено, що Langfuse створив evaluator execution traces в environment `langfuse-llm-as-a-judge`.
+- Через `/api/public/unstable/evaluation-rules` підтверджено, що обидва live rules лишаються `active` під час перевірки.
+- Через `traces get <trace-id> --fields scores` і `/api/public/v2/scores` підтверджено, що production traces реально отримали автоматичні scores:
+  - `bd312bb0a061123d9a0a970e37bee41b`: `answer_relevance = 1`, `report_structure = True`
+  - `d8d1ef6e4eeb15a73045794cc9e8816e`: `answer_relevance = 0.9/1`, `report_structure = False/True`
+  - `755888c29aa33b1a2f7be9819cf9ca52`: `answer_relevance = 0.5/1`, `report_structure = False/True`
+- Scores виглядають логічно, а не випадково:
+  - більш чітка й структурована відповідь отримує `1` / `True`
+  - weaker supervisor outputs у revision flow отримують нижчий relevance score або `False` для structure
+- Важливий нюанс: scoring тут observation-level, а не trace-level. Тому один production trace може містити кілька score entries, якщо всередині було кілька `supervisor` observations, що матчаться під rule filter.
 
 ---
 
@@ -317,16 +393,46 @@ Definition of done:
 
 Goal: не зламати наявний baseline під час observability-інтеграції.
 
-- [ ] Після кожного значущого етапу проганяти `npm run validate`.
-- [ ] Не ламати `main.ts` interactive flow.
-- [ ] Не ламати `main-batch.ts` batch flow.
-- [ ] Не ламати `threadId` resume semantics.
-- [ ] Не змішувати Langfuse runtime logic з RAG business logic без потреби.
-- [ ] Не втратити чинні smoke checks і DeepEval baseline.
+- [x] Після кожного значущого етапу проганяти `npm run validate`.
+- [x] Не ламати `main.ts` interactive flow.
+- [x] Не ламати `main-batch.ts` batch flow.
+- [x] Не ламати `threadId` resume semantics.
+- [x] Не змішувати Langfuse runtime logic з RAG business logic без потреби.
+- [x] Не втратити чинні smoke checks і DeepEval baseline.
 
 Definition of done:
 
-- [ ] Після повної інтеграції baseline залишається робочим і перевіряється тим самим validation entrypoint.
+- [x] Після повної інтеграції baseline залишається робочим і перевіряється тим самим validation entrypoint.
+
+Verification notes:
+
+- `2026-04-28`: виконано повний `npm run validate` після observability/evaluator integration.
+- Validation entrypoint пройшов повністю:
+  - `tsc --noEmit`
+  - architecture invariants
+  - planner validation
+  - researcher validation
+  - critic validation
+  - supervisor validation
+  - deterministic multi-agent workflow smoke
+  - RAG ingest/retrieval smoke suite
+- `main.ts` interactive flow перевірений живим CLI запуском:
+  - один user request успішно пройшов Planner -> Researcher -> Critic -> HITL review -> `write_report`
+  - `approve` коректно відновив той самий supervisor thread
+  - report збережений у `output/rag_short_report.md`
+- `main-batch.ts` batch flow лишається робочим:
+  - це підтверджено як `npm run validate`, так і production batch traces з `Block 8` / `Block 10`
+  - traces `mas-batch-full` успішно створювалися вже після evaluator setup
+- `threadId` resume semantics не зламані:
+  - deterministic smoke script `scripts/smoke-multi-agent-flow.sh` перевіряє resume через той самий `thread_id`
+  - живий CLI run також показав коректне resume після `approve`
+- Розділення відповідальностей не зламане:
+  - `scripts/check-architecture-invariants.sh` підтвердив, що tools лишаються decoupled від agent/OpenAI internals
+  - RAG модулі не змішані з Langfuse runtime logic поза tracing/observability boundaries
+- DeepEval baseline повернуто в робочий стан для offline mode:
+  - системний `python3` у середовищі = `3.9.6` і не сумісний з установленим `deepeval`
+  - під `python3.11` suite працює коректно
+  - після відновлення missing offline fixtures в `output/` команда `DEEPEVAL_OFFLINE=1 python3.11 -m pytest -q` пройшла: `34 passed`
 
 ---
 
@@ -334,16 +440,16 @@ Definition of done:
 
 Goal: зібрати все, що потрібно для фінальної здачі.
 
-- [ ] Зробити скріншот trace tree.
-- [ ] Зробити скріншот session view.
-- [ ] Зробити скріншот evaluator scores.
-- [ ] Зробити скріншот prompt management.
-- [ ] Покласти всі 4 скріншоти в `screenshots/`.
-- [ ] Перевірити, що скріншоти реально показують саме цей проєкт, а не сторонній demo.
+- [x] Зробити скріншот trace tree.
+- [x] Зробити скріншот session view.
+- [x] Зробити скріншот evaluator scores.
+- [x] Зробити скріншот prompt management.
+- [x] Покласти всі 4 скріншоти в `screenshots/`.
+- [x] Перевірити, що скріншоти реально показують саме цей проєкт, а не сторонній demo.
 
 Definition of done:
 
-- [ ] Є повний пакет артефактів для здачі lesson 12.
+- [x] Є повний пакет артефактів для здачі lesson 12.
 
 ---
 
