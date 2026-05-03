@@ -12,6 +12,65 @@ Phase 0 (Foundation) is complete: the canonical layout from `ARCHITECTURE § 3` 
 
 When asked to implement something, work from `docs/ARCHITECTURE.md` and the next pending checklist item in `docs/DELIVERY_CHECKLIST.md`. Both documents are in Ukrainian; the design intent is binding.
 
+## Development principles
+
+These three principles override personal style preferences. They apply to every change.
+
+### Library-first
+
+Before writing custom logic, check whether a library in the stack already provides it. The stack was chosen specifically for feature completeness — bypassing it usually means reinventing something worse.
+
+Concrete preferences for this project:
+
+- Structured output → `with_structured_output(SchemaModel)`, not manual JSON parsing.
+- Tools → `@tool` decorator, not hand-rolled JSON schemas.
+- Chunking → `RecursiveCharacterTextSplitter`, not custom splitters.
+- Hybrid retrieval → `EnsembleRetriever` (LangChain) when its API fits; only hand-roll RRF if filters force it.
+- BM25 → `langchain_community.retrievers.BM25Retriever` or `rank_bm25`, not a custom inverted index.
+- Reranking → `langchain_classic.retrievers.document_compressors.CrossEncoderReranker`.
+- Memory → `PostgresSaver` (LangGraph checkpointer), not custom serialization.
+- Tracing → Langfuse `CallbackHandler`, not manual logging into Langfuse.
+- Prompts → `langfuse.get_prompt(...).compile(...)`, not hardcoded strings.
+- HITL → `HumanInTheLoopMiddleware` (LangChain agents), not custom interrupt logic.
+
+If a library doesn't cover the case, custom code is fine — but the module's docstring must say *why* (one sentence). Do not silently reimplement framework features.
+
+### Comments earn their place
+
+Code should explain itself through naming and structure. Comments are added only when one of:
+
+- They explain **why**, not **what** — business reason, link to an ADR, statute, or ticket.
+- They document non-obvious external behavior (e.g. *"Tavily ignores `country` without `language`"*).
+- They are `TODO` / `FIXME` with an owner and a clear next action.
+
+Anti-patterns (do not write):
+
+- Comments that restate the code (`# create the user` above `create_user(...)`).
+- Section dividers (`# === Section ===`). Restructure the file instead.
+- Commented-out code. Delete it; git keeps history.
+
+### Cleanup is part of done
+
+Implementation isn't complete until the workspace is clean. Before marking a checklist item `[x]`:
+
+- Remove stubs, mock data, temporary `print` / `logger.debug` statements.
+- Remove dead imports and unused symbols.
+- Delete throwaway files (`scratch.py`, `test_local.py`, ad-hoc Jupyter notebooks left in the repo root).
+- Sync `requirements.txt` (with version pins) and `.env.example` (with new keys + comments).
+- If the implementation diverged from `docs/ARCHITECTURE.md`, update the architecture doc in the same change. Material decisions get a new ADR row in § 15.
+
+The full per-item checklist is in **`docs/DELIVERY_CHECKLIST.md` → "Definition of Done"**. Run through it before closing any item.
+
+## Reference patterns from lectures
+
+Lecture-derived patterns are stored in **`.claude/references/`** as compact, single-topic markdown files (one pattern per file, with minimal example + pitfalls). Use these as the authoritative source for framework APIs — they reflect the exact versions taught in the course, which is more reliable than memory for fast-moving libraries (LangChain 1.x, LangGraph, Langfuse, DeepEval).
+
+Workflow:
+
+- Before invoking a framework feature you haven't used in this repo yet, list `.claude/references/` and read the matching file (e.g. `langgraph_fanout_with_send.md` before adding fan-out, `deepeval_geval_pattern.md` before writing a custom metric).
+- If a needed pattern isn't covered, the source notebooks are in `docs/lectures/` (lessons 5–12). Extract the minimal example into a new `references/` file in the same format rather than dumping the whole lecture into context.
+- References are the *first* place to look. Memory is the *last*.
+
 ## Common commands
 
 ```bash
@@ -65,7 +124,8 @@ Key invariants to preserve when editing:
 
 - **Three-domain scope** (technical / procurement_general / legal). Off-topic filtering is *defense in depth* — Planner gate (`is_on_topic`), per-agent system prompts, and Critic's Structure dimension. Don't collapse these layers; each catches what the previous misses.
 - **Inter-agent contracts are Pydantic models** (`ResearchPlan`, `SubTask`, `WorkerResponse`, `CritiqueResult`, `EscalationOutput`). These belong in `schemas.py`. Agents communicate via these structured outputs, not free text.
-- **Two RAG collections, not one**: `laws` (large chunks, article-level) for the Lawyer, `articles` (smaller chunks with overlap) for Common/Technical Support. Technical Support filters `articles` by `subcategory=tutorial`. Don't merge them.
+- **Two RAG collections, not one**: `laws` (large chunks, article-level) for the Lawyer, `articles` (smaller chunks with overlap) for Common/Technical Support. Technical Support pre-filters `articles` by `tags` against the `TECH_SUPPORT_TAG_WHITELIST` from `.env` (the exact whitelist is finalized after dataset analysis — see ADR / Open TODOs). Don't merge the two collections.
+- **Retrieval is hybrid + reranked, not semantic-only**: every RAG call goes through semantic search + BM25 → ensemble (RRF) → cross-encoder rerank (`BAAI/bge-reranker-base`) → score-threshold filter. The Lawyer additionally pre-filters by `article_number` when the query contains a statute reference. Don't bypass the hybrid pipeline by calling Qdrant or BM25 directly from agents — go through `tools/rag.py`.
 - **Critic's `revise` is targeted** — it returns `revision_requests=[{topic, request}]` and the Supervisor only re-runs the named workers, not the whole graph.
 - **Escalation has two trigger paths**: Planner sets `needs_human=true` (skip workers/Critic entirely), or Critic exhausts `CRITIC_MAX_RETRIES`. Both produce the same `EscalationOutput` to a Slack expert channel + audit-trail file.
 - **Sessions** use `langgraph-checkpoint-postgres` (`PostgresSaver`); session ID is `team_id:channel_id:user_id[:thread_ts]`.
