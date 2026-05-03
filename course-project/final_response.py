@@ -6,10 +6,17 @@ from language import get_no_answer_message, get_section_label
 from schemas import WorkerResponse
 
 
-def format_response(responses: list[WorkerResponse], language: str = "uk") -> str:
+def aggregate(responses: list[WorkerResponse], language: str = "uk") -> str:
+    deduped: dict[str, WorkerResponse] = {}
+    for resp in responses:
+        deduped[resp.topic] = resp
+
+    topic_order = ["legal", "procurement_general", "technical_system"]
+    ordered = [deduped[t] for t in topic_order if t in deduped]
+
     sections: list[str] = []
 
-    for response in responses:
+    for response in ordered:
         if not response.found:
             continue
 

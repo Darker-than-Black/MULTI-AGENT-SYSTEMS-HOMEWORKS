@@ -13,6 +13,16 @@ class Source(BaseModel):
     title: str
     url: str | None = None
     doc_id: str
+    metadata: dict = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_doc_id(cls, data):
+        if isinstance(data, dict) and not data.get("doc_id"):
+            fallback = data.get("url") or data.get("title")
+            if fallback:
+                data = {**data, "doc_id": fallback}
+        return data
 
 
 class WorkerResponse(BaseModel):
@@ -51,11 +61,26 @@ class ResearchPlan(BaseModel):
         return self
 
 
+class RevisionRequest(BaseModel):
+    topic: Literal["legal", "procurement_general", "technical_system"]
+    request: str
+    severity: Literal["minor", "major"]
+
+
 class CritiqueResult(BaseModel):
-    verdict: Literal["approve", "revise", "escalate"]
-    revision_requests: list[dict] = Field(default_factory=list)
-    dimensions: dict = Field(default_factory=dict)
+    verdict: Literal["approve", "revise"]
+    freshness_score: float = Field(ge=0.0, le=1.0)
+    completeness_score: float = Field(ge=0.0, le=1.0)
+    structure_score: float = Field(ge=0.0, le=1.0)
+    gaps: list[str] = Field(default_factory=list)
+    revision_requests: list[RevisionRequest] = Field(default_factory=list)
     summary: str = ""
+
+    @model_validator(mode="after")
+    def validate_revisions(self) -> "CritiqueResult":
+        if self.verdict == "revise" and not self.revision_requests:
+            raise ValueError("revise verdict requires at least one revision_request")
+        return self
 
 
 class EscalationOutput(BaseModel):

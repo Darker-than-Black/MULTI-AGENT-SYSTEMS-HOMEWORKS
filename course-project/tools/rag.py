@@ -19,7 +19,14 @@ def _format_chunks(chunks: list) -> str:
             "title", chunk.doc_id
         )
         source = chunk.metadata.get("source_url") or chunk.doc_id
-        blocks.append(f"---\n{breadcrumb}\n{chunk.text}\nДжерело: {source}")
+        date_str = (
+            chunk.metadata.get("version_date")
+            or chunk.metadata.get("date_published")
+            or "невідомо"
+        )
+        blocks.append(
+            f"---\n{breadcrumb}\n{chunk.text}\nДжерело: {source}\nДата: {date_str}"
+        )
 
     context = "\n\n".join(blocks)
     return context[:_MAX_CONTEXT_CHARS] if len(context) > _MAX_CONTEXT_CHARS else context

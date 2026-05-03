@@ -1,36 +1,43 @@
-"""Planner agent: classify procurement-support queries into a single ResearchPlan."""
+"""Planner agent: classify procurement-support queries into a multi-topic ResearchPlan."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.lawyer import get_llm
+from config import settings
 from schemas import ResearchPlan
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+_MAX_SUBTASKS_PLACEHOLDER = "__PLANNER_MAX_SUBTASKS__"
 
 
 def _load_system_prompt() -> str:
-    return (_PROMPTS_DIR / "planner.md").read_text(encoding="utf-8")
+    prompt = (_PROMPTS_DIR / "planner.md").read_text(encoding="utf-8")
+    return prompt.replace(
+        _MAX_SUBTASKS_PLACEHOLDER,
+        str(settings.planner_max_subtasks),
+    )
 
 
-def _normalize_phase2_plan(plan: ResearchPlan) -> ResearchPlan:
+def _normalize_plan(plan: ResearchPlan) -> ResearchPlan:
     if plan.needs_human and plan.subtasks:
         return plan.model_copy(update={"subtasks": []})
-    if len(plan.subtasks) > 1:
-        return plan.model_copy(update={"subtasks": plan.subtasks[:1]})
+    if len(plan.subtasks) > settings.planner_max_subtasks:
+        return plan.model_copy(
+            update={"subtasks": plan.subtasks[: settings.planner_max_subtasks]}
+        )
     return plan
 
 
 def invoke_planner(query: str) -> ResearchPlan:
-    prompt = ChatPromptTemplate.from_messages(
+    llm = get_llm().with_structured_output(ResearchPlan)
+    plan = llm.invoke(
         [
-            ("system", _load_system_prompt()),
-            ("human", "{query}"),
+            SystemMessage(content=_load_system_prompt()),
+            HumanMessage(content=query),
         ]
     )
-    chain = prompt | get_llm().with_structured_output(ResearchPlan)
-    plan = chain.invoke({"query": query})
-    return _normalize_phase2_plan(plan)
+    return _normalize_plan(plan)

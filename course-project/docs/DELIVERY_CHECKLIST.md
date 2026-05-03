@@ -163,38 +163,38 @@
 > **Кінець фази:** запит "яка комісія на майданчику X і чи не порушує це закон Y" → паралельно technical + legal → агрегована відповідь → Critic approve/revise.
 
 ### 3.1 Planner: multi-topic
-- [ ] Прибрати обмеження `max_subtasks=1`, дозволити до `PLANNER_MAX_SUBTASKS`
-- [ ] Few-shot examples у prompt для multi-topic запитів
-- [ ] Тести: запит охоплює 2-3 топіки → план містить відповідну кількість subtasks
+- [x] Прибрати обмеження `max_subtasks=1`, дозволити до `PLANNER_MAX_SUBTASKS`
+- [x] Few-shot examples у prompt для multi-topic запитів
+- [x] Тести: запит охоплює 2-3 топіки → план містить відповідну кількість subtasks
 
 ### 3.2 Fan-out в LangGraph
-- [ ] `fan_out_dispatcher` node з Send API (ARCHITECTURE § 5.4)
-- [ ] State: `worker_responses: Annotated[list[WorkerResponse], operator.add]`
-- [ ] Перевірка паралельного виконання (час ~ longest worker, не сумарний)
+- [x] `fan_out_dispatcher` node з Send API (ARCHITECTURE § 5.4)
+- [x] State: `worker_responses: Annotated[list[WorkerResponse], operator.add]`
+- [x] Перевірка паралельного виконання (час ~ longest worker, не сумарний)
 
 ### 3.3 Aggregator
-- [ ] `final_response.py` — `aggregate(worker_responses, language) -> str`
-- [ ] Markdown секції в правильному порядку, скіп пустих
-- [ ] Unit-тести: 1, 2, 3 секції; всі пусті; mix found/not-found
+- [x] `final_response.py` — `aggregate(worker_responses, language) -> str`
+- [x] Markdown секції в правильному порядку, скіп пустих
+- [x] Unit-тести: 1, 2, 3 секції; всі пусті; mix found/not-found
 
 ### 3.4 Critic Agent
-- [ ] `agents/critic.py`
-- [ ] System prompt з трьома вимірами (Freshness / Completeness / Structure)
-- [ ] Tools: web_search (для fact-checking) — опційно для першої версії
-- [ ] Output: `CritiqueResult`
-- [ ] Логіка freshness: порівняння `version_date` / `date_published` з порогами з `.env`
+- [x] `agents/critic.py`
+- [x] System prompt з трьома вимірами (Freshness / Completeness / Structure)
+- [x] Tools: web_search (для fact-checking) — опційно для першої версії
+- [x] Output: `CritiqueResult`
+- [x] Логіка freshness: порівняння `version_date` / `date_published` з порогами з `.env`
 
 ### 3.5 Critic loop в графі
-- [ ] `critic_node` після `aggregate_responses_node`
-- [ ] `route_after_critic` conditional edge
-- [ ] `targeted_redispatcher` — Send тільки тим workers, кому є `revision_requests`
-- [ ] State: `retry_count` (увеличуємо на кожному revise), `critic_history: list[CritiqueResult]`
-- [ ] При `retry_count >= CRITIC_MAX_RETRIES` → escalation
+- [x] `critic_node` після `aggregate_responses_node`
+- [x] `route_after_critic` conditional edge
+- [x] `targeted_redispatcher` — Send тільки тим workers, кому є `revision_requests`
+- [x] State: `retry_count` (увеличуємо на кожному revise), `critic_history: list[CritiqueResult]`
+- [x] При `retry_count >= CRITIC_MAX_RETRIES` → escalation
 
 ### 3.6 Worker з revision_feedback
-- [ ] Кожен worker приймає опційний `revision_feedback` параметр
-- [ ] Інжектиться у prompt як "Попередня версія отримала зауваження: ..."
-- [ ] Worker зобовʼязаний врахувати feedback або обґрунтовано визнати, що не може
+- [x] Кожен worker приймає опційний `revision_feedback` параметр
+- [x] Інжектиться у prompt як "Попередня версія отримала зауваження: ..."
+- [x] Worker зобовʼязаний врахувати feedback або обґрунтовано визнати, що не може
 
 **🎯 Milestone 3:** multi-topic запит проходить fan-out → aggregate → critic → optional revise → final response.
 

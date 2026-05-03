@@ -47,8 +47,22 @@ def get_technical_support_agent():  # type: ignore[return]
     return _technical_support
 
 
-def invoke_technical_support(query: str) -> WorkerResponse:
+def invoke_technical_support(
+    query: str, revision_feedback: str | None = None
+) -> WorkerResponse:
+    if revision_feedback:
+        query = f"[REVISION REQUEST]: {revision_feedback}\n\n[ORIGINAL QUERY]: {query}"
     result = get_technical_support_agent().invoke(
         {"messages": [HumanMessage(content=query)]}
     )
     return result["structured_response"]
+
+
+def technical_support_node(state: dict) -> dict:
+    subtask = state["subtask"]
+    feedback = state.get("revision_feedback")
+    return {
+        "worker_responses": [
+            invoke_technical_support(subtask.query, revision_feedback=feedback)
+        ]
+    }

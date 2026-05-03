@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from langchain_core.runnables import Runnable
 
-from agents.planner import invoke_planner
+from agents.planner import _load_system_prompt, invoke_planner
 from schemas import ResearchPlan, SubTask
 
 
@@ -156,21 +156,7 @@ def test_planner_technical_classification(patch_planner_llm) -> None:
     assert result.subtasks[0].topic == "technical_system"
 
 
-def test_planner_single_subtask_enforced(patch_planner_llm) -> None:
-    plan = _plan(
-        query="Який строк оскарження умов тендерної документації?",
-        topic="legal",
-    )
-    patch_planner_llm(plan)
-
-    result = invoke_planner("Який строк оскарження умов тендерної документації?")
-
-    assert isinstance(result, ResearchPlan)
-    assert len(result.subtasks) == 1
-    assert result.subtasks[0].topic == "legal"
-
-
-def test_planner_trims_multiple_subtasks_to_one(patch_planner_llm) -> None:
+def test_planner_preserves_multi_topic_subtasks(patch_planner_llm) -> None:
     plan = ResearchPlan(
         is_on_topic=True,
         original_query="Поясни статтю 17 і як подати пропозицію в системі",
@@ -187,8 +173,81 @@ def test_planner_trims_multiple_subtasks_to_one(patch_planner_llm) -> None:
 
     result = invoke_planner("Поясни статтю 17 і як подати пропозицію в системі")
 
-    assert len(result.subtasks) == 1
-    assert result.subtasks[0].topic == "legal"
+    assert len(result.subtasks) == 2
+    assert {st.topic for st in result.subtasks} == {"legal", "technical_system"}
+
+
+def test_planner_preserves_three_topic_subtasks(patch_planner_llm) -> None:
+    plan = ResearchPlan(
+        is_on_topic=True,
+        original_query=(
+            "Як замовник публікує оголошення в Prozorro, які законодавчі "
+            "вимоги і де в кабінеті це зробити?"
+        ),
+        subtasks=[
+            SubTask(
+                topic="procurement_general",
+                query="Порядок публікації оголошення",
+                rationale="General workflow",
+            ),
+            SubTask(
+                topic="legal",
+                query="Законодавчі вимоги до оголошення",
+                rationale="Legal requirements",
+            ),
+            SubTask(
+                topic="technical_system",
+                query="Де в кабінеті публікувати оголошення",
+                rationale="UI steps",
+            ),
+        ],
+    )
+    patch_planner_llm(plan)
+
+    result = invoke_planner(plan.original_query)
+
+    assert len(result.subtasks) == 3
+    assert [st.topic for st in result.subtasks] == [
+        "procurement_general",
+        "legal",
+        "technical_system",
+    ]
+
+
+def test_planner_trims_to_max_subtasks(
+    patch_planner_llm, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from config import settings
+
+    monkeypatch.setattr(settings, "planner_max_subtasks", 2)
+
+    plan = ResearchPlan(
+        is_on_topic=True,
+        original_query="multi",
+        subtasks=[
+            SubTask(topic="legal", query="a", rationale="r"),
+            SubTask(topic="procurement_general", query="b", rationale="r"),
+            SubTask(topic="technical_system", query="c", rationale="r"),
+        ],
+    )
+    patch_planner_llm(plan)
+
+    result = invoke_planner("multi")
+
+    assert len(result.subtasks) == 2
+
+
+def test_load_system_prompt_uses_runtime_max_subtasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from config import settings
+
+    monkeypatch.setattr(settings, "planner_max_subtasks", 4)
+
+    prompt = _load_system_prompt()
+
+    assert "__PLANNER_MAX_SUBTASKS__" not in prompt
+    assert "від 1 до `4` підзадач" in prompt
 
 
 def test_planner_clears_subtasks_for_direct_escalation(patch_planner_llm) -> None:

@@ -1,6 +1,13 @@
 import pytest
 
-from schemas import ResearchPlan, Source, SubTask, WorkerResponse
+from schemas import (
+    CritiqueResult,
+    ResearchPlan,
+    RevisionRequest,
+    Source,
+    SubTask,
+    WorkerResponse,
+)
 
 
 @pytest.fixture
@@ -107,4 +114,80 @@ def mock_research_plan_escalation() -> ResearchPlan:
         subtasks=[],
         needs_human=True,
         escalation_reason="Запит потребує експертної юридичної оцінки та контексту, якого немає в системі.",
+    )
+
+
+@pytest.fixture
+def mock_research_plan_multi_topic() -> ResearchPlan:
+    return ResearchPlan(
+        is_on_topic=True,
+        original_query="Поясни статтю 17 і де в кабінеті подати пропозицію",
+        subtasks=[
+            SubTask(
+                topic="legal",
+                query="Тлумачення статті 17 Закону про публічні закупівлі",
+                rationale="Юридична частина запиту.",
+            ),
+            SubTask(
+                topic="technical_system",
+                query="Кроки в кабінеті учасника для подання тендерної пропозиції",
+                rationale="Технічна частина запиту.",
+            ),
+        ],
+    )
+
+
+@pytest.fixture
+def mock_worker_responses_round1() -> list[WorkerResponse]:
+    return [
+        WorkerResponse(
+            topic="legal",
+            found=True,
+            answer="Стаття 17 встановлює підстави для відхилення.",
+            confidence=0.8,
+        ),
+        WorkerResponse(
+            topic="procurement_general",
+            found=True,
+            answer="Загальний порядок передбачає кілька етапів.",
+            confidence=0.75,
+        ),
+        WorkerResponse(
+            topic="technical_system",
+            found=True,
+            answer="У кабінеті оберіть розділ 'Подати пропозицію'.",
+            confidence=0.82,
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_critique_approve() -> CritiqueResult:
+    return CritiqueResult(
+        verdict="approve",
+        freshness_score=0.9,
+        completeness_score=0.95,
+        structure_score=0.92,
+        gaps=[],
+        revision_requests=[],
+        summary="Відповідь повна і добре структурована.",
+    )
+
+
+@pytest.fixture
+def mock_critique_revise() -> CritiqueResult:
+    return CritiqueResult(
+        verdict="revise",
+        freshness_score=0.5,
+        completeness_score=0.6,
+        structure_score=0.7,
+        gaps=["Відсутні актуальні джерела для legal"],
+        revision_requests=[
+            RevisionRequest(
+                topic="legal",
+                request="Додай посилання на актуальну редакцію статті.",
+                severity="major",
+            )
+        ],
+        summary="Юридична частина потребує оновлення джерел.",
     )

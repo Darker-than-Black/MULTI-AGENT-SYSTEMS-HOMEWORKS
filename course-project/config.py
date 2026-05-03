@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # ── Observability (Langfuse) ──────────────────────────────────────
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
-    langfuse_base_url: str = "https://us.cloud.langfuse.com"
+    langfuse_base_url: str = "https://cloud.langfuse.com"
 
     @field_validator(
         "tech_support_allowed_domains",
