@@ -1,29 +1,95 @@
-from pydantic import SecretStr
-from pydantic_settings import BaseSettings
+"""Pydantic Settings — single source of truth for runtime configuration.
+
+All environment variables are loaded here. No other module should call
+os.environ directly; import `settings` instead.
+
+Phase-0 invariant: every secret is Optional[SecretStr] with default None,
+so `Settings()` validates with an empty .env. Components that need a
+specific key (LLM, Tavily, Slack, Langfuse) will assert it themselves
+when first used in Phase 1+.
+"""
+
+from typing import Annotated, Literal
+
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    api_key: SecretStr
-    model_name: str = "gpt-5.2"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        case_sensitive=False,
+    )
 
-    # Web search
-    max_search_results: int = 5
-    max_url_content_length: int = 5000
-
-    # RAG
+    # ── LLM ───────────────────────────────────────────────────────────
+    llm_provider: Literal["openai", "anthropic"] = "openai"
+    llm_model: str = "gpt-4o"
+    openai_api_key: SecretStr | None = None
+    anthropic_api_key: SecretStr | None = None
     embedding_model: str = "text-embedding-3-small"
-    data_dir: str = "data"
-    index_dir: str = "index"
-    chunk_size: int = 500
-    chunk_overlap: int = 100
-    retrieval_top_k: int = 10
-    rerank_top_n: int = 3
 
-    # Agent
-    output_dir: str = "output"
-    max_iterations: int = 10
+    # ── Web search (Tavily) ───────────────────────────────────────────
+    tavily_api_key: SecretStr | None = None
+    # NoDecode disables pydantic-settings' JSON-decode of list-typed env
+    # values, so the CSV validator below receives the raw string.
+    tech_support_allowed_domains: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
+    tech_support_tag_whitelist: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
 
-    model_config = {"env_file": ".env"}
+    # ── Vector DB (Qdrant) ────────────────────────────────────────────
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: SecretStr | None = None
+    qdrant_laws_collection: str = "laws"
+    qdrant_articles_collection: str = "articles"
+    laws_freshness_threshold_days: int = 180
+    articles_freshness_threshold_days: int = 365
+
+    # ── Hybrid retrieval ──────────────────────────────────────────────
+    retrieval_top_k: int = 20
+    hybrid_semantic_weight: float = 0.6
+    hybrid_bm25_weight: float = 0.4
+
+    # ── Reranking ─────────────────────────────────────────────────────
+    reranker_model: str = "BAAI/bge-reranker-base"
+    rerank_top_k: int = 5
+    rerank_score_threshold: float = 0.3
+
+    # ── Postgres (LangGraph checkpointer) ─────────────────────────────
+    postgres_url: str = (
+        "postgresql://postgres:postgres@localhost:5432/agent_sessions"
+    )
+    session_ttl_hours: int = 24
+
+    # ── Slack ─────────────────────────────────────────────────────────
+    slack_bot_token: SecretStr | None = None
+    slack_signing_secret: SecretStr | None = None
+    slack_user_channel_id: str | None = None
+    slack_expert_channel_id: str | None = None
+
+    # ── Agent behavior ────────────────────────────────────────────────
+    critic_max_retries: int = 3
+    worker_timeout_seconds: int = 60
+    planner_max_subtasks: int = 3
+
+    # ── Observability (Langfuse) ──────────────────────────────────────
+    langfuse_public_key: SecretStr | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_base_url: str = "https://us.cloud.langfuse.com"
+
+    @field_validator(
+        "tech_support_allowed_domains",
+        "tech_support_tag_whitelist",
+        mode="before",
+    )
+    @classmethod
+    def _split_csv(cls, v):
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
 
-SYSTEM_PROMPT = """"""
+settings = Settings()

@@ -13,26 +13,26 @@
 > **Мета:** репозиторій, інфраструктура, базовий конфіг. Кінець фази: проєкт запускається з `python main.py` і виводить `Hello`.
 
 ### 0.1 Ініціалізація репозиторію
-- [ ] Створити структуру директорій згідно з `ARCHITECTURE.md` § 3
-- [ ] `.gitignore` (Python, .env, .venv, qdrant_data, pg_data, output/, __pycache__)
-- [ ] `README.md` — заглушка зі схемою архітектури, посиланнями на ARCHITECTURE та DELIVERY_CHECKLIST
-- [ ] `requirements.txt` — повний стек з ARCHITECTURE.md § 2 з фіксованими версіями
-- [ ] Python venv, перевірити що `pip install -r requirements.txt` проходить чисто
+- [x] Створити структуру директорій згідно з `ARCHITECTURE.md` § 3
+- [x] `.gitignore` (Python, .env, .venv, qdrant_data, pg_data, output/, __pycache__)
+- [x] `README.md` — заглушка зі схемою архітектури, посиланнями на ARCHITECTURE та DELIVERY_CHECKLIST
+- [x] `requirements.txt` — повний стек з ARCHITECTURE.md § 2 з фіксованими версіями
+- [x] Python venv, перевірити що `pip install -r requirements.txt` проходить чисто
 
 ### 0.2 Конфігурація через Pydantic Settings
-- [ ] `config.py` — клас `Settings(BaseSettings)` з усіма полями з ARCHITECTURE § 11
-- [ ] Валідатори для CSV-полів (`tech_support_allowed_domains`, `tech_support_tag_whitelist`)
-- [ ] `.env.example` з повним переліком ключів і коментарями-описами
-- [ ] Тест: `python -c "from config import settings; print(settings.llm_model)"` працює
+- [x] `config.py` — клас `Settings(BaseSettings)` з усіма полями з ARCHITECTURE § 11
+- [x] Валідатори для CSV-полів (`tech_support_allowed_domains`, `tech_support_tag_whitelist`)
+- [x] `.env.example` з повним переліком ключів і коментарями-описами
+- [x] Тест: `python -c "from config import settings; print(settings.llm_model)"` працює
 
 ### 0.3 Інфраструктура локально
-- [ ] `docker-compose.yml` — Qdrant + Postgres
-- [ ] Перевірити запуск: `docker compose up -d`, `curl localhost:6333/healthz`
-- [ ] Ініціалізація Postgres: створення схеми для LangGraph checkpointer (через `PostgresSaver.setup()`)
+- [x] `docker-compose.yml` — Qdrant + Postgres
+- [x] Перевірити запуск: `docker compose up -d`, `curl localhost:6333/healthz`
+- [x] Ініціалізація Postgres: створення схеми для LangGraph checkpointer (через `PostgresSaver.setup()`)
 
 ### 0.4 Stub main.py
-- [ ] Завантаження settings, простий REPL loop ("введіть питання → друкуємо назад")
-- [ ] Перевірка: `python main.py` запускається, читає stdin, не падає
+- [x] Завантаження settings, простий REPL loop ("введіть питання → друкуємо назад")
+- [x] Перевірка: `python main.py` запускається, читає stdin, не падає
 
 ---
 

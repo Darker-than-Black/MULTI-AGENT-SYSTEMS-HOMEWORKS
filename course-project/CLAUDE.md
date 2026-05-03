@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This is a course-project scaffold for a Ukrainian public-procurement (ЕСЗ / Prozorro) support assistant. The README is the source of truth for the *target* design — most Python modules at the repo root (`agent.py`, `ingest.py`, `retriever.py`, `tools.py`) are intentional stubs (`...` / `pass`) waiting to be implemented against that design. Don't treat them as the working system; treat them as named slots. The data-pipeline scripts under `scripts/` are real and runnable.
+This is a course-project scaffold for a Ukrainian public-procurement (ЕСЗ / Prozorro) support assistant.
 
-When asked to implement something, work from the architecture in `README.md` rather than inferring from the empty modules. The README is in Ukrainian; the design intent is binding even where code does not yet exist.
+The canonical design lives in **`docs/ARCHITECTURE.md`** (modules, Pydantic contracts, LangGraph nodes/edges, RAG, Slack, Langfuse, ADR). The implementation roadmap lives in **`docs/DELIVERY_CHECKLIST.md`** (Phase 0–9, vertical slices). README is a stub that links to both.
+
+Phase 0 (Foundation) is complete: the canonical layout from `ARCHITECTURE § 3` exists as empty package directories (`agents/`, `tools/`, `retrieval/`, `ingest/`, `observability/`, `prompts/`, `tests/`, `output/`); `config.py` is the full `Settings` from `ARCHITECTURE § 11`; runtime infra (Qdrant + Postgres) is in `docker-compose.yml`; the data-pipeline MariaDB has moved to `docker-compose.ingest.yml`. `main.py` is currently a Phase-0 echo-REPL — Lawyer single-topic logic lands in Phase 1.
+
+When asked to implement something, work from `docs/ARCHITECTURE.md` and the next pending checklist item in `docs/DELIVERY_CHECKLIST.md`. Both documents are in Ukrainian; the design intent is binding.
 
 ## Common commands
 
@@ -14,20 +18,26 @@ When asked to implement something, work from the architecture in `README.md` rat
 # Python deps (Python 3.11+ recommended; LangChain >=1.2 and pydantic >=2.12 are pinned)
 pip install -r requirements.txt
 
-# Source MariaDB (Prozorro infobox dump) used only by the export script
-docker compose up -d        # starts local-prozorro-db on :3306
+# Runtime infrastructure (Qdrant + Postgres for sessions/checkpointer)
+docker compose up -d
 docker compose down
+
+# One-time: create LangGraph checkpointer schema in Postgres (idempotent)
+python scripts/setup_postgres_checkpointer.py
+
+# Source MariaDB (Prozorro infobox dump) — used ONLY by the export script
+docker compose -f docker-compose.ingest.yml up -d   # starts local-prozorro-db on :3306
+docker compose -f docker-compose.ingest.yml down
 
 # Build datasets for ingestion (writes JSONL into data/)
 python scripts/create_procurement_law_dataset.py   # → data/law/procurement_legal_dataset.jsonl
-python scripts/export_infobox_db.py --output-dir data/infobox  # needs the docker DB running
+python scripts/export_infobox_db.py --output-dir data/infobox  # needs the ingest docker DB running
 
-# Application entry points (currently stubs)
-python ingest.py            # build vector index from data/
-python main.py              # REPL loop over the LangGraph agent
+# Application entry point (Phase 0: echo REPL; real graph from Phase 1.7)
+python main.py
 ```
 
-The README also references `deepeval test run tests/` for evaluation, but no `tests/` directory exists yet — create it before running.
+The architecture references `deepeval test run tests/` for evaluation; the `tests/` directory exists but is empty until Phase 1.1.
 
 ## Architecture (target)
 
@@ -66,10 +76,10 @@ Key invariants to preserve when editing:
 
 `data/law/procurement_legal_dataset.jsonl` is built by `scripts/create_procurement_law_dataset.py`, which scrapes `zakon.rada.gov.ua` for a fixed list of laws/resolutions (Закон 922, КМУ 1178, 1275, 166, ...) and chunks them at ~2000 chars (sized for cl100k Ukrainian tokenization, leaving headroom under the 512-token limits of BGE-M3 / multilingual-e5).
 
-`data/infobox/*.jsonl` is built by `scripts/export_infobox_db.py`, which shells out to `docker compose exec mariadb mysql ...` against the `prozorro` database loaded from `prozorro_backup.sql` (this SQL dump is *not* in the repo — it must be placed alongside `docker-compose.yml` for the DB to initialize).
+`data/infobox/*.jsonl` is built by `scripts/export_infobox_db.py`, which shells out to `docker compose -f docker-compose.ingest.yml exec mariadb mysql ...` against the `prozorro` database loaded from `prozorro_backup.sql` (this SQL dump is *not* in the repo — it must be placed alongside `docker-compose.ingest.yml` for the DB to initialize).
 
-Ingestion (`ingest.py`) is the bridge from these JSONLs into the vector store; it's currently a TODO list of steps in a docstring.
+Runtime ingestion into Qdrant lands in Phase 1.3 as `ingest/run_ingest.py` (the package directory `ingest/` already exists from Phase 0).
 
 ## Configuration
 
-`config.py` declares a Pydantic `Settings` (`BaseSettings`) class loaded from `.env`. Per the README the full target env surface includes Tavily, Postgres, Slack tokens, Langfuse keys, and tunables (`CRITIC_MAX_RETRIES`, `WORKER_TIMEOUT_SECONDS`, `PLANNER_MAX_SUBTASKS`) — the current `Settings` only has a small subset. Extend it rather than introducing parallel config loaders. There is no `.env.example` yet; the README lists the canonical keys.
+`config.py` declares the full Pydantic `Settings(BaseSettings)` from `docs/ARCHITECTURE § 11` (LLM, Tavily, Qdrant, Postgres, Slack, Langfuse, behavior limits, freshness thresholds). Secrets are `Optional[SecretStr]` so `Settings()` validates with an empty `.env`; components assert their own required keys when first used. CSV-valued fields (`tech_support_allowed_domains`, `tech_support_tag_whitelist`) are split via a `field_validator`. The canonical env-key list is in `.env.example`. Never read `os.environ` outside `config.py`.
