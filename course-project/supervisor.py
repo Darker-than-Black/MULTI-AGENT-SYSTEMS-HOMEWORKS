@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from agents.common_support import common_support_node
 from agents.critic import critic_node
+from agents.escalation import escalation_node
 from agents.lawyer import lawyer_node
 from agents.planner import invoke_planner
 from agents.technical_support import technical_support_node
@@ -85,11 +87,10 @@ def off_topic_node(state: GraphState) -> dict:
     return {"final_response": message, "escalated": False}
 
 
-def escalation_stub_node(state: GraphState) -> dict:
-    return {
-        "final_response": "Запит передано фахівцю для подальшого опрацювання.",
-        "escalated": True,
-    }
+def route_after_aggregate(state: GraphState) -> str:
+    if any(r.needs_human for r in state.get("worker_responses", [])):
+        return "escalation_node"
+    return "critic_node"
 
 
 def final_response_node(state: GraphState) -> dict:
@@ -107,7 +108,7 @@ def route_after_planner(state: GraphState) -> str:
     if not plan.is_on_topic:
         return "off_topic_node"
     if plan.needs_human:
-        return "escalation_stub_node"
+        return "escalation_node"
     return "fan_out_dispatcher"
 
 
@@ -116,11 +117,11 @@ def route_after_critic(state: GraphState) -> str:
     if last_critique.verdict == "approve":
         return "final_response_node"
     if state["retry_count"] >= settings.critic_max_retries:
-        return "escalation_stub_node"
+        return "escalation_node"
     return "targeted_redispatcher"
 
 
-def build_graph():
+def build_graph(checkpointer: BaseCheckpointSaver | None = None):
     builder = StateGraph(GraphState)
     builder.add_node("planner_node", planner_node)
     builder.add_node("fan_out_dispatcher", fan_out_dispatcher)
@@ -131,7 +132,7 @@ def build_graph():
     builder.add_node("critic_node", critic_node)
     builder.add_node("targeted_redispatcher", targeted_redispatcher)
     builder.add_node("off_topic_node", off_topic_node)
-    builder.add_node("escalation_stub_node", escalation_stub_node)
+    builder.add_node("escalation_node", escalation_node)
     builder.add_node("final_response_node", final_response_node)
 
     builder.add_edge(START, "planner_node")
@@ -141,7 +142,7 @@ def build_graph():
         {
             "fan_out_dispatcher": "fan_out_dispatcher",
             "off_topic_node": "off_topic_node",
-            "escalation_stub_node": "escalation_stub_node",
+            "escalation_node": "escalation_node",
         },
     )
     builder.add_conditional_edges(
@@ -151,13 +152,17 @@ def build_graph():
     )
     for worker in ("lawyer_node", "common_support_node", "technical_support_node"):
         builder.add_edge(worker, "aggregate_responses_node")
-    builder.add_edge("aggregate_responses_node", "critic_node")
+    builder.add_conditional_edges(
+        "aggregate_responses_node",
+        route_after_aggregate,
+        {"critic_node": "critic_node", "escalation_node": "escalation_node"},
+    )
     builder.add_conditional_edges(
         "critic_node",
         route_after_critic,
         {
             "final_response_node": "final_response_node",
-            "escalation_stub_node": "escalation_stub_node",
+            "escalation_node": "escalation_node",
             "targeted_redispatcher": "targeted_redispatcher",
         },
     )
@@ -167,9 +172,8 @@ def build_graph():
         ["lawyer_node", "common_support_node", "technical_support_node"],
     )
     builder.add_edge("off_topic_node", END)
-    builder.add_edge("escalation_stub_node", END)
+    builder.add_edge("escalation_node", END)
     builder.add_edge("final_response_node", END)
-    return builder.compile(checkpointer=MemorySaver())
-
-
-graph = build_graph()
+    if checkpointer is None:
+        checkpointer = MemorySaver()
+    return builder.compile(checkpointer=checkpointer)

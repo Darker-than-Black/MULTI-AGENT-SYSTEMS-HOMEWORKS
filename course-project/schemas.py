@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import operator
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -84,10 +85,13 @@ class CritiqueResult(BaseModel):
 
 
 class EscalationOutput(BaseModel):
-    reason: str
-    original_query: str
+    summary: str
+    category: Literal["bug", "feature_request", "unanswerable", "max_retries_exceeded"]
+    customer_message: str
+    attempted_resolution: str
+    full_context: dict
+    timestamp: datetime
     session_id: str
-    timestamp: str
 
 
 class GraphState(TypedDict):

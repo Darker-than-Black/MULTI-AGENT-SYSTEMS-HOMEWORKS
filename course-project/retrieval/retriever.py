@@ -83,19 +83,35 @@ _bm25_cache: dict[str, BM25Retriever] = {}
 _reranker: CrossEncoderReranker | None = None
 
 
-def _get_bm25_retriever(collection: str) -> BM25Retriever:
-    if collection not in _bm25_cache:
+def _get_bm25_retriever(
+    collection: str, tag_whitelist: list[str] | None = None
+) -> BM25Retriever:
+    cache_key = (
+        f"{collection}:tags={','.join(sorted(tag_whitelist))}"
+        if tag_whitelist
+        else collection
+    )
+    if cache_key not in _bm25_cache:
         docs: list[Document] = []
         for path in _COLLECTION_PATHS.get(collection, []):
             if path.exists():
                 with path.open() as f:
                     for line in f:
                         r = json.loads(line)
+                        if tag_whitelist:
+                            doc_tags = r.get("tags") or []
+                            if isinstance(doc_tags, str):
+                                doc_tags = [doc_tags]
+                            if not any(t in tag_whitelist for t in doc_tags):
+                                continue
                         docs.append(Document(page_content=r["text"], metadata=r))
+        # BM25Retriever crashes on empty corpus — guard with a placeholder doc
+        if not docs:
+            docs = [Document(page_content="немає даних", metadata={"_placeholder": True})]
         retriever = BM25Retriever.from_documents(docs)
         retriever.k = settings.retrieval_top_k
-        _bm25_cache[collection] = retriever
-    return _bm25_cache[collection]
+        _bm25_cache[cache_key] = retriever
+    return _bm25_cache[cache_key]
 
 
 def _get_reranker() -> CrossEncoderReranker:
@@ -124,12 +140,19 @@ def hybrid_search(
     if collection == "laws" and filters is None:
         filters = _extract_article_refs(query)
 
+    # Keep Qdrant and BM25 in sync: extract tag whitelist so BM25 corpus
+    # matches the same subset that Qdrant filters on.
+    tag_whitelist: list[str] | None = None
+    if filters and "tags" in filters:
+        raw = filters["tags"]
+        tag_whitelist = raw if isinstance(raw, list) else [raw]
+
     qdrant_ret = _QdrantRetriever(
         collection=collection,
         filters=filters,
         top_k=settings.retrieval_top_k,
     )
-    bm25_ret = _get_bm25_retriever(collection)
+    bm25_ret = _get_bm25_retriever(collection, tag_whitelist=tag_whitelist)
     bm25_ret.k = settings.retrieval_top_k
 
     ensemble = EnsembleRetriever(

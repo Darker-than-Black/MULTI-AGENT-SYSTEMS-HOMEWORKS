@@ -65,8 +65,9 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 24
 
     # ── Slack ─────────────────────────────────────────────────────────
+    slack_app_token: SecretStr | None = None       # xapp-... required for Socket Mode
     slack_bot_token: SecretStr | None = None
-    slack_signing_secret: SecretStr | None = None
+    slack_signing_secret: SecretStr | None = None  # required only for HTTP mode
     slack_user_channel_id: str | None = None
     slack_expert_channel_id: str | None = None
 

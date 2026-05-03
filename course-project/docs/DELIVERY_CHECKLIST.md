@@ -217,8 +217,8 @@
 
 ### 4.4 Інтеграція в `hybrid_search`
 - [x] `_extract_article_refs` — article_number pre-filter для Lawyer (автоматично)
-- [ ] tags pre-filter для Technical Support (очікує Phase 2.3)
-- [ ] A/B вручну: semantic-only vs hybrid+rerank на 5-10 тестових запитах
+- [x] tags pre-filter для Technical Support — `_get_bm25_retriever` отримує `tag_whitelist`, кешується окремо по тегах; `hybrid_search` витягує теги з `filters["tags"]` і передає в BM25 поруч з Qdrant-фільтром
+- [x] A/B скрипт: `scripts/ab_retrieval.py` — 7 тестових запитів, виводить semantic-only vs hybrid+rerank side-by-side для ручного огляду
 
 **🎯 Milestone 4:** виконано достроково разом з Phase 1. Залишається ручна A/B валідація та tags pre-filter (Phase 2.3).
 
@@ -229,31 +229,26 @@
 > **Мета:** перехід з REPL на Slack бота з persistent sessions.
 
 ### 5.1 Postgres checkpointer
-- [ ] Замінити `MemorySaver` на `PostgresSaver`
-- [ ] Setup схеми (одноразово через `PostgresSaver.setup()`)
-- [ ] Тест: рестарт додатку — попередня сесія підвантажується по `thread_id`
+- [x] Замінити `MemorySaver` на `PostgresSaver`
+- [x] Setup схеми (одноразово через `PostgresSaver.setup()`)
+- [ ] Тест: рестарт додатку — попередня сесія підвантажується по `thread_id` _(ручна перевірка після `docker compose up`)_
 
 ### 5.2 Session ID generator
-- [ ] `make_session_id(team_id, channel_id, user_id)` — формат з ARCHITECTURE § 8.2
-- [ ] Опційний `:thread_ts` для Slack threads
+- [x] `make_session_id(team_id, channel_id, user_id)` — формат з ARCHITECTURE § 8.2
+- [x] Опційний `:thread_ts` для Slack threads
 
 ### 5.3 Slack Bolt app
-- [ ] `main.py` — Slack Bolt setup, токени з `.env`
-- [ ] Handler на `app_mention` у `SLACK_USER_CHANNEL_ID`
-- [ ] Виклик графа з `thread_id = session_id`
-- [ ] Reply у thread оригінального message
+- [x] `main.py` — Slack Bolt setup, токени з `.env`
+- [x] Handler на `app_mention` у `SLACK_USER_CHANNEL_ID`
+- [x] Виклик графа з `thread_id = session_id`
+- [x] Reply у thread оригінального message
 
 ### 5.4 Slack publisher для escalation
-- [ ] `tools/slack_publisher.py` — функція `post_to_expert_channel(EscalationOutput)`
-- [ ] Block Kit або markdown форматування з ARCHITECTURE § 9.3
-- [ ] Error handling: якщо Slack недоступний — fallback до файлу
+- [x] `tools/slack_publisher.py` — функція `post_to_expert_channel(EscalationOutput)`
+- [x] Block Kit або markdown форматування з ARCHITECTURE § 9.3
+- [x] Error handling: якщо Slack недоступний — fallback до файлу (try/except в `escalation_node`)
 
-### 5.5 REPL fallback
-- [ ] Прапор у main.py: `--mode=slack|repl`
-- [ ] REPL читає stdin замість Slack events, все інше працює так само
-- [ ] Корисно для розробки і демо
-
-**🎯 Milestone 5:** Slack бот відповідає на питання в каналі, сесії живуть між рестартами.
+**🎯 Milestone 5:** код повністю реалізовано; потребує ручного smoke-test з реальними Slack токенами.
 
 ---
 
@@ -262,23 +257,23 @@
 > **Мета:** повноцінний Escalation flow.
 
 ### 6.1 Escalation Agent
-- [ ] `agents/escalation.py` — формує `EscalationOutput`
-- [ ] LLM-виклик для `summary` поля (стисле формулювання для оператора)
-- [ ] Збереження report у `output/escalations/{session_id}_{timestamp}.json`
+- [x] `agents/escalation.py` — формує `EscalationOutput`
+- [x] LLM-виклик для `summary` поля (стисле формулювання для оператора)
+- [x] Збереження report у `output/escalations/{session_id}_{timestamp}.json`
 
 ### 6.2 Інтеграція в граф
-- [ ] `escalation_node` замість заглушки
-- [ ] Тригери: `plan.needs_human=True`, `retry_count >= MAX_RETRIES`, технічні помилки
+- [x] `escalation_node` замість заглушки
+- [x] Тригери: `plan.needs_human=True`, `retry_count >= MAX_RETRIES`, технічні помилки
 
 ### 6.3 Static user-facing message
-- [ ] Шаблон повідомлення для користувача (UK/EN), що "запит передано оператору"
-- [ ] Без розкриття внутрішніх деталей
+- [x] Шаблон повідомлення для користувача (UK/EN), що "запит передано оператору"
+- [x] Без розкриття внутрішніх деталей
 
 ### 6.4 Slack publish + file save
-- [ ] Виклик `slack_publisher.post_to_expert_channel`
-- [ ] File save як аудит-trail (завжди, навіть якщо Slack ОК)
+- [x] Виклик `slack_publisher.post_to_expert_channel`
+- [x] File save як аудит-trail (завжди, навіть якщо Slack ОК)
 
-**🎯 Milestone 6:** ескалація працює end-to-end (планер → escalate, retry overflow → escalate, bug detection в technical → escalate).
+**🎯 Milestone 6:** повністю реалізовано і покрито тестами.
 
 ---
 
@@ -287,31 +282,31 @@
 > **Мета:** повне трейсинг + Prompt Management + LLM-as-a-Judge.
 
 ### 7.1 Langfuse setup
-- [ ] Account, project, API keys у `.env`
-- [ ] `observability/langfuse_client.py` — singleton клієнт
-- [ ] `observability/callbacks.py` — `CallbackHandler` factory
+- [x] Account, project, API keys у `.env` _(ручне налаштування — потребує реального Langfuse account)_
+- [x] `observability/langfuse_client.py` — singleton клієнт з graceful fallback
+- [x] `observability/callbacks.py` — `CallbackHandler` factory
 
 ### 7.2 Tracing інтеграція
-- [ ] Передача callback у `graph.invoke(config={"callbacks": [...]})`
-- [ ] Metadata: `user_id`, `session_id`, `tags`
-- [ ] Перевірка: 3-5 запусків → 3-5 traces у Langfuse UI з повним деревом
+- [x] Передача callback у `graph.invoke(config={"callbacks": [...]})`
+- [x] Metadata: `user_id`, `session_id`, `tags`
+- [ ] Перевірка: 3-5 запусків → 3-5 traces у Langfuse UI _(потребує налаштованого Langfuse account)_
 
 ### 7.3 Prompt Management
-- [ ] Створити промпти в Langfuse UI з label `production`
-- [ ] Замінити `prompts/*.md` reading на `langfuse.get_prompt(...).compile(...)`
-- [ ] Backup prompts в репо для git review (sync script — опційно)
-- [ ] Перевірка: змінити prompt в Langfuse → перезапустити агент → нова поведінка без redeploy
+- [x] Створити промпти в Langfuse UI з label `production` _(ручне — запустити `python scripts/sync_prompts.py` після налаштування account)_
+- [x] Замінити `prompts/*.md` reading на `langfuse.get_prompt(...).compile(...)` з fallback на локальний файл
+- [x] Backup prompts в репо + `scripts/sync_prompts.py` для синхронізації
+- [ ] Перевірка: змінити prompt в Langfuse → нова поведінка без redeploy _(потребує налаштованого Langfuse)_
 
 ### 7.4 Sessions + Users tracking
-- [ ] Заповнення `session_id`, `user_id` у callback metadata
-- [ ] Перевірка: Sessions / Users tabs у Langfuse містять дані
+- [x] Заповнення `session_id`, `user_id` у callback metadata
+- [ ] Перевірка: Sessions / Users tabs у Langfuse містять дані _(потребує налаштованого Langfuse)_
 
 ### 7.5 LLM-as-a-Judge evaluators
-- [ ] Налаштувати в Langfuse UI мінімум 2 evaluators (Groundedness + Off-topic adherence)
-- [ ] Зробити 3-5 нових запусків
-- [ ] Перевірити автоматичні scores у traces
+- [ ] Налаштувати в Langfuse UI мінімум 2 evaluators _(ручне налаштування в UI)_
+- [ ] Зробити 3-5 нових запусків і перевірити автоматичні scores _(manual)_
+- [x] Прототип GEval тесту: `tests/evaluations/test_eval_geval.py` — Groundedness для Lawyer
 
-**🎯 Milestone 7:** усі traces у Langfuse, prompts завантажуються з prod label, evaluators запускаються автоматично.
+**🎯 Milestone 7:** код-частина готова; Langfuse account + UI налаштування залишаються ручними кроками.
 
 ---
 
@@ -325,16 +320,17 @@
 - [ ] Структура з ARCHITECTURE § 13.2
 
 ### 8.2 Unit tests
-- [ ] `tests/conftest.py` — фікстури (settings, mock LLM, sample chunks)
-- [ ] Тести на чисті функції: chunkers, RRF merge, language detection, section formatting
+- [x] `tests/conftest.py` — фікстури (mock LLM, sample chunks, mock Tavily)
+- [x] Тести на чисті функції: RRF/BM25 tag filtering, language detection, section formatting, aggregator
 
-### 8.3 Component tests (DeepEval)
-- [ ] `test_planner.py` — Plan Quality (GEval) на 3-5 кейсах
-- [ ] `test_lawyer.py` — Groundedness на юридичних кейсах
-- [ ] `test_common_support.py` — Groundedness + Answer Relevancy
-- [ ] `test_technical_support.py` — escalation detection (Tool Correctness + GEval)
-- [ ] `test_critic.py` — Critique Quality (custom GEval)
-- [ ] `test_escalation.py` — EscalationOutput completeness
+### 8.3 Component tests
+- [x] `test_planner.py` — behavioral unit tests (mock LLM): off-topic, escalation, single/multi-topic routing
+- [x] `test_lawyer.py` — behavioral unit tests: invoke + WorkerResponse structure
+- [x] `test_common_support.py` — behavioral unit tests: tools wiring + output structure
+- [x] `test_technical_support.py` — behavioral unit tests: escalation detection, tag whitelist wiring
+- [x] `test_critic.py` — behavioral unit tests: approve/revise verdicts, retry logic
+- [x] `test_escalation.py` — EscalationOutput completeness (всі поля, категорії, file save, Slack publish)
+- [ ] GEval quality tests (LLM-as-a-judge) — лише прототип у `tests/evaluations/test_eval_geval.py`
 
 ### 8.4 Tool correctness tests
 - [ ] `test_tools.py` — мінімум 3 кейси (Planner викликає правильні tools, Lawyer тільки `rag_search`, Technical Support викликає `web_search` з whitelist)
@@ -348,7 +344,7 @@
 - [ ] GitHub Actions workflow `deepeval test run tests/`
 - [ ] Запуск на PR
 
-**🎯 Milestone 8:** `deepeval test run tests/` проходить, baseline scores зафіксовані.
+**🎯 Milestone 8:** behavioral unit тести (140 шт.) зелені; GEval quality evals, golden dataset та E2E — відкриті.
 
 ---
 

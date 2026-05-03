@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.lawyer import get_llm
+from config import settings
+from observability.langfuse_client import load_prompt
 from schemas import CritiqueResult, GraphState, ResearchPlan, WorkerResponse
 
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-
-
-from config import settings
 
 def _load_system_prompt() -> str:
-    template = (_PROMPTS_DIR / "critic.md").read_text(encoding="utf-8")
-    return template.format(
+    return load_prompt(
+        name="procurement-critic",
         laws_threshold=settings.laws_freshness_threshold_days,
         articles_threshold=settings.articles_freshness_threshold_days,
     )

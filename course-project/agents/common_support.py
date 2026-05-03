@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 
@@ -11,12 +9,11 @@ from agents.lawyer import get_llm
 from schemas import WorkerResponse
 from tools.rag import make_rag_search_articles
 from tools.web_search import web_search
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+from observability.langfuse_client import load_prompt
 
 
 def _load_system_prompt() -> str:
-    return (_PROMPTS_DIR / "common_support.md").read_text(encoding="utf-8")
+    return load_prompt(name="procurement-common-support")
 
 
 def build_common_support_agent():  # type: ignore[return]

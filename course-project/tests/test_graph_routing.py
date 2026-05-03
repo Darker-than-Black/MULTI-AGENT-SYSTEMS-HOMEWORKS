@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import supervisor
+from language import get_escalation_message
 from schemas import CritiqueResult, ResearchPlan, RevisionRequest, SubTask, WorkerResponse
 
 
@@ -123,6 +124,17 @@ def patch_graph_dependencies(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(supervisor, "critic_node", fake_critic_node)
 
+    monkeypatch.setattr(
+        supervisor,
+        "escalation_node",
+        lambda state: {
+            "final_response": get_escalation_message(
+                state["plan"].language if state.get("plan") else "uk"
+            ),
+            "escalated": True,
+        },
+    )
+
     return SimpleNamespace(plan=plan_holder, critique=critique_holder)
 
 
@@ -189,7 +201,7 @@ def test_off_topic_query_returns_refusal(patch_graph_dependencies) -> None:
     assert "поза межами системи ProZorro" in result["final_response"]
 
 
-def test_escalation_returns_stub_message(patch_graph_dependencies) -> None:
+def test_escalation_routes_and_sets_escalated_flag(patch_graph_dependencies) -> None:
     patch_graph_dependencies.plan.plan = _plan(
         query="Система не працює",
         topic=None,
@@ -204,7 +216,7 @@ def test_escalation_returns_stub_message(patch_graph_dependencies) -> None:
     )
 
     assert result["escalated"] is True
-    assert result["final_response"] == "Запит передано фахівцю для подальшого опрацювання."
+    assert result["final_response"] == get_escalation_message("uk")
 
 
 def test_multi_topic_fan_out_collects_all_responses(patch_graph_dependencies) -> None:

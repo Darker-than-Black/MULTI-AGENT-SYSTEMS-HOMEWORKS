@@ -27,3 +27,12 @@ def get_section_label(topic: str, language: str = "uk") -> str:
 
 def get_no_answer_message(language: str = "uk") -> str:
     return _NO_ANSWER.get(language, _NO_ANSWER["uk"])
+
+
+_ESCALATION_MESSAGE: dict[str, str] = {
+    "uk": "Ваш запит передано фахівцю для подальшого опрацювання. Ми зв'яжемося з вами найближчим часом.",
+    "en": "Your request has been escalated to a specialist for further review. We will get back to you shortly.",
+}
+
+def get_escalation_message(language: str = "uk") -> str:
+    return _ESCALATION_MESSAGE.get(language, _ESCALATION_MESSAGE["uk"])

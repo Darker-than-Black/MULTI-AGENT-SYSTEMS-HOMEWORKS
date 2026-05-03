@@ -187,7 +187,7 @@ class TestRouteAfterCritic:
         state = _state(retry_count=3, critic_history=[revise])
 
         with patch.object(settings, "critic_max_retries", 3):
-            assert route_after_critic(state) == "escalation_stub_node"
+            assert route_after_critic(state) == "escalation_node"
 
     def test_revise_above_max_retries_routes_to_escalation(self) -> None:
         from config import settings
@@ -200,4 +200,4 @@ class TestRouteAfterCritic:
         state = _state(retry_count=5, critic_history=[revise])
 
         with patch.object(settings, "critic_max_retries", 3):
-            assert route_after_critic(state) == "escalation_stub_node"
+            assert route_after_critic(state) == "escalation_node"

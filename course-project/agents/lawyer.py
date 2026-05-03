@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -13,8 +11,7 @@ from langgraph.prebuilt import create_react_agent
 from config import settings
 from schemas import WorkerResponse
 from tools.rag import rag_search
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+from observability.langfuse_client import load_prompt
 
 
 class OpenAIFunctionCallingChat(ChatOpenAI):
@@ -31,17 +28,18 @@ def get_llm() -> BaseChatModel:
         return OpenAIFunctionCallingChat(
             model=settings.llm_model,
             api_key=settings.openai_api_key.get_secret_value(),
+            temperature=0,
         )
     assert settings.anthropic_api_key, "ANTHROPIC_API_KEY required"
     return ChatAnthropic(
         model=settings.llm_model,
         api_key=settings.anthropic_api_key.get_secret_value(),
+        temperature=0,
     )
 
 
 def _load_system_prompt() -> str:
-    # Phase 1: local file. Phase 7 migrates to langfuse.get_prompt("lawyer").compile()
-    return (_PROMPTS_DIR / "lawyer.md").read_text(encoding="utf-8")
+    return load_prompt(name="procurement-lawyer")
 
 
 def build_lawyer_agent():  # type: ignore[return]

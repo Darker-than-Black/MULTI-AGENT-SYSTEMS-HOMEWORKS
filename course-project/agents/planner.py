@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.lawyer import get_llm
 from config import settings
+from observability.langfuse_client import load_prompt
 from schemas import ResearchPlan
 
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 _MAX_SUBTASKS_PLACEHOLDER = "__PLANNER_MAX_SUBTASKS__"
 
 
 def _load_system_prompt() -> str:
-    prompt = (_PROMPTS_DIR / "planner.md").read_text(encoding="utf-8")
+    prompt = load_prompt(name="procurement-planner")
     return prompt.replace(
         _MAX_SUBTASKS_PLACEHOLDER,
         str(settings.planner_max_subtasks),
