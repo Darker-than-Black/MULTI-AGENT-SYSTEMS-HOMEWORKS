@@ -93,10 +93,10 @@
 
 **Поведінка:**
 - Активується для підзадач з topic `technical_system`.
-- Шукає у векторній колекції `articles` (з фільтром по `subcategory=tutorial`) та в інтернеті по whitelist-у доменів технічної документації майданчиків.
+- Шукає у векторній колекції `articles` з пре-фільтром за `tags` (whitelist у `.env`) та в інтернеті по whitelist-у доменів технічної документації майданчиків.
 - Якщо нічого не знайдено і запит виглядає як опис баги/відсутньої функції — повертає прапорець, що потребує людської валідації (це підхопить Critic або Supervisor як сигнал до ескалації).
 
-**Інструменти:** RAG (semantic search по колекції `articles`), Web Search (Tavily з `allowed_domains` whitelist).
+**Інструменти:** RAG (semantic search по колекції `articles` з пре-фільтром за `tags`), Web Search (Tavily з `allowed_domains` whitelist).
 
 ### Critic Agent
 
@@ -175,30 +175,130 @@ class EscalationOutput(BaseModel):
 
 ## База знань для RAG
 
-**Дві колекції в одному інстансі векторної БД:**
+**Векторна БД:** Qdrant. Дві колекції (`laws` та `articles`) в одному інстансі — спільна інфраструктура, спільний embedding-pipeline, але різні стратегії chunking та фільтрації.
 
-| Колекція | Вміст | Стратегія chunking |
+**Чому Qdrant:** нативна підтримка metadata-фільтрації (payload filters) перед vector search, що критично для нашої архітектури з пре-фільтрами (`article_number`, `tags`); production-ready з моменту першого запуску; добре інтегрований з LangChain.
+
+### Колекція `laws`
+
+Закони та нормативно-правові акти у сфері публічних закупівель.
+
+**Стратегія chunking:** великі чанки на рівні структурного елементу документа (стаття / частина статті / параграф), щоб зберігати юридичний контекст цілісним. Розрізати статтю на дрібні фрагменти не можна — втрачається змістова повнота.
+
+**Схема метаданих:**
+
+| Поле | Тип | Призначення |
 |---|---|---|
-| `laws` | Закони та нормативно-правові акти у сфері публічних закупівель | Більші чанки (стаття цілісна за змістом) |
-| `articles` | Статті, FAQ, технічна документація сервісу та майданчиків | Менші чанки з overlap |
+| `id` | string | Унікальний ID chunk-а |
+| `doc_id` | string | ID документа (спільний для всіх chunks одного закону) |
+| `title` | string | Назва документа (наприклад, *"КУпАП, стаття 164-14 «Порушення законодавства про закупівлі»"*) |
+| `type` | string | Тип документа (`code_article`, `law`, `regulation`, ...) |
+| `authority` | string | Орган, що видав (наприклад, `Верховна Рада України`) |
+| `domain` | string | Тематичний домен (наприклад, `administrative_liability_procurement`) |
+| `source` | string | Короткий лейбл джерела (наприклад, `zakon.rada.gov.ua`) |
+| `source_url` | string | Повна URL для цитування у відповіді |
+| `version_date` | date | Дата редакції документа — критично для Freshness-перевірок Critic |
+| `date_fetched` | datetime | Коли документ завантажений у KB |
+| `breadcrumb` | string | Готовий контекстний ідентифікатор (наприклад, *"КУпАП, стаття 164-14 «...», редакція від 03.05.2026"*) — використовується у відповіді як human-readable джерело |
+| `section_heading` | string | Заголовок секції, до якої належить chunk |
+| `article_number` | string | Номер статті (для прямого пошуку за номером) |
+| `part_number` | string \| null | Номер частини статті |
+| `paragraph_number` | string \| null | Номер параграфа |
+| `section_index` | int | Індекс секції в документі |
+| `chunk_index` | int | Індекс chunk-а в межах секції |
+| `text` | string | Власне текст chunk-а |
 
-**Метадані (мінімум):**
-- `source_type`: `law` / `article`
-- `source_url`
-- `published_date`
-- `last_updated`
-- `law_number` (для законів — для прямого пошуку за номером)
-- `subcategory` (для articles): `faq` / `tutorial` / `policy`
-- `chunk_index`
+**Що векторизуємо:** конкатенацію `breadcrumb + section_heading + text`. Це закладає юридичний контекст в embedding і покращує retrieval за номерами статей (запит "стаття 164-14 КУпАП" знаходить релевантний chunk навіть без точного збігу слів).
 
-**Які агенти куди шукають:**
-- Lawyer Agent → `laws` (виключно).
-- Common Support Agent → `articles`.
-- Technical Support Agent → `articles` з фільтром `subcategory=tutorial`.
+### Колекція `articles`
 
-**Готові датасети** (від користувача):
-- статті та матеріали внутрішнього сервісу про публічні закупівлі;
-- закони та нормативні акти.
+Статті, FAQ, методичні матеріали, технічна документація сервісу та майданчиків.
+
+**Стратегія chunking:** менші чанки (~500-800 токенів) з overlap ~100 токенів — стандартний `RecursiveCharacterTextSplitter`.
+
+**Схема метаданих:**
+
+| Поле | Тип | Призначення |
+|---|---|---|
+| `id` | string | Унікальний ID chunk-а |
+| `doc_id` | string | ID документа |
+| `title` | string | Назва статті |
+| `type` | string | Тип контенту (`article`, `faq`, `tutorial`, ...) |
+| `date_published` | datetime | Дата публікації — для Freshness |
+| `tags` | list[string] | Теги (наприклад, `["роботи", "предмет закупівлі", "планування"]`) |
+| `source` | string | Лейбл джерела (наприклад, `Prozorro`) — за замовчуванням, можна додати під час ingestion |
+| `source_url` | string \| null | URL оригіналу — за замовчуванням |
+| `chunk_index` | int | Індекс chunk-а |
+| `text` | string | Текст chunk-а |
+
+**Що векторизуємо:** конкатенацію `title + tags(joined) + text`. Теги додають семантичні якорі і покращують retrieval за тематичними запитами.
+
+### Маршрутизація запитів агентів
+
+| Агент | Колекція | Стратегія фільтрації |
+|---|---|---|
+| **Lawyer Agent** | `laws` (виключно) | Без додаткової фільтрації; за наявності в запиті номера статті — пре-фільтр за `article_number` перед vector search |
+| **Common Support Agent** | `articles` | Без фільтра або з опційним пре-фільтром за `tags` |
+| **Technical Support Agent** | `articles` | Пре-фільтр за `tags` (whitelist у `.env` `TECH_SUPPORT_TAG_WHITELIST` — **TODO: точний перелік тегів формується після аналізу повного датасету статей**) |
+
+**Приклад пре-фільтрації:** для запиту *"яка відповідальність за порушення статті 164-14"* Lawyer Agent спочатку фільтрує метадатою `article_number == "164-14"`, потім — vector search всередині звуженої вибірки. Це різко підвищує precision і скорочує latency.
+
+### Hybrid Search + Reranking
+
+Кожен RAG-пошук проходить трьохступеневу обробку:
+
+**1. Hybrid retrieval (semantic + BM25):**
+- **Semantic search** — vector search у Qdrant за cosine similarity.
+- **BM25 search** — лексичний пошук за ключовими словами (бібліотека `rank_bm25`).
+- **Ensemble** — об'єднання результатів через зважений Reciprocal Rank Fusion (RRF) або через `EnsembleRetriever` з LangChain. Ваги налаштовуються через `.env` (`HYBRID_SEMANTIC_WEIGHT`, `HYBRID_BM25_WEIGHT`).
+
+**Чому hybrid:** semantic ловить смислові збіги (*"чому списали гроші"* → FAQ про автопродовження підписки), BM25 ловить точні терміни і числа (*"стаття 164-14"*, *"ДБН А.2.2-3:2014"*). Для законодавчого домену з великою кількістю номерів статей, кодів класифікаторів і назв нормативних актів — це must-have.
+
+**2. Top-K retrieval:**
+- На етапі hybrid retrieval повертаємо `RETRIEVAL_TOP_K` кандидатів (наприклад, 20).
+- Це широке "сітка" — далі звужуємо reranker-ом.
+
+**3. Cross-encoder reranking:**
+- Модель: `BAAI/bge-reranker-base` (або `bge-reranker-v2-m3` для кращої якості за ціною latency).
+- Reranker оцінює пари `(query, candidate)` і повертає precision-orієнтовані scores.
+- Залишаємо `RERANK_TOP_K` найкращих (наприклад, 5).
+- Кандидати з score нижче `RERANK_SCORE_THRESHOLD` відкидаються — це і є фільтр шуму.
+
+**Архітектурний layout:**
+
+```
+query → [pre-filter by metadata]
+      → semantic search (top 20)  ─┐
+      → BM25 search (top 20)       ├─ Ensemble (RRF) → top 20
+      →                            ─┘
+      → cross-encoder reranker → top 5 (above threshold)
+      → return chunks + scores
+```
+
+**Реалізація:** окремий модуль `retriever.py` з єдиним інтерфейсом `hybrid_search(query, collection, filters, top_k) -> list[Chunk]`. Усі агенти викликають через цей інтерфейс — нікому не треба знати про BM25 чи reranker.
+
+### Формування sources у відповіді
+
+При формуванні відповіді worker-агенти повертають `sources: list[str]`. Формат залежить від колекції:
+
+- Для `laws`: використовуємо `breadcrumb` + `source_url` → у відповіді показуємо як `[КУпАП, стаття 164-14, редакція від 03.05.2026](https://zakon.rada.gov.ua/...)`.
+- Для `articles`: використовуємо `title` + `source_url` (або `source` якщо URL відсутній) → `[Порядок визначення предмета закупівлі — Prozorro](https://...)`.
+
+**Дедуплікація:** якщо retrieval повернув кілька chunks одного документа (за `doc_id`), у sources вказуємо документ **один раз**.
+
+### Freshness signals для Critic
+
+Critic під час оцінки виміру Freshness використовує:
+
+- Для `laws`: `version_date` — якщо найсвіжіший знайдений документ старший за `LAWS_FRESHNESS_THRESHOLD_DAYS` (з `.env`), додає попередження у `gaps`. Для законодавства це критично — застаріла редакція може давати неправильну юридичну пораду.
+- Для `articles`: `date_published` — поріг `ARTICLES_FRESHNESS_THRESHOLD_DAYS`. Менш критично, але корисно для технічних статей про інтерфейс майданчиків (там часто змінюються UI-флоу).
+
+### Готові датасети (від користувача)
+
+- **Закони** — нормативна база у форматі, що відповідає схемі колекції `laws` (вже з `breadcrumb`, `article_number`, `version_date` тощо).
+- **Статті** — матеріали внутрішнього сервісу про публічні закупівлі у форматі колекції `articles` (з `tags`, `date_published`).
+
+**Ingestion-пайплайн** (`ingest.py`) приймає JSONL/JSON-файли з готовими метаданими, виконує лише chunking (якщо потрібно) + embedding + upsert у векторну БД. Без OCR, без парсингу сирих PDF — це вже зроблено upstream.
 
 ## Web Search
 
@@ -280,11 +380,25 @@ EMBEDDING_MODEL=text-embedding-3-small
 # Web search
 TAVILY_API_KEY=...
 TECH_SUPPORT_ALLOWED_DOMAINS=domain1.ua,domain2.ua,...
+TECH_SUPPORT_TAG_WHITELIST=майданчик,інтерфейс,tutorial
 
-# Vector DB
-VECTOR_DB_URL=...
-VECTOR_DB_LAWS_COLLECTION=laws
-VECTOR_DB_ARTICLES_COLLECTION=articles
+# Vector DB (Qdrant)
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=...
+QDRANT_LAWS_COLLECTION=laws
+QDRANT_ARTICLES_COLLECTION=articles
+LAWS_FRESHNESS_THRESHOLD_DAYS=180
+ARTICLES_FRESHNESS_THRESHOLD_DAYS=365
+
+# Hybrid retrieval
+RETRIEVAL_TOP_K=20
+HYBRID_SEMANTIC_WEIGHT=0.6
+HYBRID_BM25_WEIGHT=0.4
+
+# Reranking
+RERANKER_MODEL=BAAI/bge-reranker-base
+RERANK_TOP_K=5
+RERANK_SCORE_THRESHOLD=0.3
 
 # Postgres (sessions)
 POSTGRES_URL=postgresql://...
@@ -405,3 +519,16 @@ procurement-support/
 - Скріншоти Langfuse: trace tree, session, evaluator scores, prompt management.
 - Тести (DeepEval) з результатами запуску.
 - Звіт про baseline-метрики системи.
+
+## Відкриті питання та TODO
+
+Перелік пунктів, які залишаються відкритими і будуть закриті під час імплементації:
+
+1. **Tag whitelist для Technical Support Agent** (`TECH_SUPPORT_TAG_WHITELIST`) — точний перелік тегів формується після аналізу повного датасету колекції `articles`. Початковий варіант — на око, з подальшим уточненням за результатами тестів.
+2. **Web search domain whitelist для Technical Support Agent** (`TECH_SUPPORT_ALLOWED_DOMAINS`) — список доменів технічної документації майданчиків формує користувач (надасть пізніше).
+3. **Embedding-модель** — `text-embedding-3-small` як baseline; якщо якість retrieval недостатня — переходити на `text-embedding-3-large` (через зміну `EMBEDDING_MODEL` у `.env`).
+4. **Reranker model** — стартуємо з `BAAI/bge-reranker-base`; якщо якість недостатня — `bge-reranker-v2-m3` (за ціною latency).
+5. **Hybrid search ваги** (`HYBRID_SEMANTIC_WEIGHT` / `HYBRID_BM25_WEIGHT`) — стартові 0.6 / 0.4; калібрувати на golden dataset.
+6. **Freshness thresholds** — стартові значення (180 днів для законів, 365 для статей) можуть бути переглянуті залежно від характеру датасету.
+7. **TTL сесії** (`SESSION_TTL_HOURS`) — стартове значення 24 години, переглянути за результатами реального використання.
+8. **Структура повідомлення в експертний Slack-канал** — точний формат (Block Kit / простий markdown) визначити під час імплементації Slack-інтеграції.
