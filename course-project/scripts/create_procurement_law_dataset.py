@@ -1,31 +1,4 @@
-"""
-Створення датасету нормативних актів публічних закупівель України для RAG.
-
-Цю версію оновлено для виправлення проблем, виявлених на попередній ітерації:
-
-1. Зменшено CHUNK_MAX_CHARS (3200 → 2000), щоб ~більшість чанків укладалися
-   у 512 токенів (ціль: open-source ембедери на кшталт BGE-M3 / multilingual-e5).
-2. Додано stateful tracking номера статті на рівні секції, тож chunk_index > 0
-   успадковує `article_number` від першого чанка секції — це піднімає coverage
-   `article_number` у законах з ~50% до майже 100% (юридична ієрархія тепер
-   не розривається).
-3. Виправлено створення `section_heading` для продовжень великих секцій:
-   chunk_index > 0 успадковує heading першого чанка замість того, щоб брати
-   обірваний шматок речення як новий заголовок (зникає 253 lowercase-headings).
-4. Видалено дублювання заголовка у `text` (раніше префікс breadcrumb писався
-   у text → 409 чанків мали "ЗАГОЛОВОК: ЗАГОЛОВОК ..."). Тепер `text` —
-   чистий зміст; контекст у `breadcrumb` (окреме поле).
-5. Усунено артефакти конкатенації `..`, ` .`, `;.`, `,.` через посилений
-   `normalize_inline_text` + очищення завершальної пунктуації у heading
-   перед використанням у breadcrumb.
-6. Дрібні службові секції (наприклад одинокі шапки "ЗАТВЕРДЖЕНО постановою
-   КМУ від ...") більше не утворюють окремих чанків-дублікатів — вони
-   приклеюються до наступної секції.
-7. Перейменовано `amendments_removed_count` → `doc_amendments_removed_count`,
-   щоб було очевидно, що це per-document метрика, а не per-chunk.
-8. Дедуплікація: якщо два чанки одного документа мають ідентичний text,
-   залишається лише перший.
-"""
+"""Створення датасету нормативних актів публічних закупівель України для RAG."""
 
 import hashlib
 import json
@@ -44,15 +17,13 @@ from bs4 import BeautifulSoup
 OUTPUT_PATH = Path("data/law/procurement_legal_dataset.jsonl")
 REPORTS_DIR = Path("reports")
 
-# CHANGED: для української cl100k токенізації ~2.3 chars/token.
+# для української cl100k токенізації ~2.3 chars/token.
 # 2000 chars ≈ 700-850 токенів — комфортно для більшості ембедерів,
 # при цьому залишається запас контексту і не б'ється про ліміт 512 у
 # моделей типу BGE-M3 / multilingual-e5 (за рахунок легкої толерантності).
 CHUNK_MAX_CHARS = 2000
 CHUNK_MIN_CHARS = 700
 CHUNK_OVERLAP_CHARS = 220
-# CHANGED: новий поріг — секції коротші за це не утворюють окремий чанк;
-# вони приклеюються до сусідньої. Запобігає ізольованим шапкам "ЗАТВЕРДЖЕНО".
 SECTION_MIN_CHARS = 250
 REQUEST_DELAY_SECONDS = 1
 
@@ -208,12 +179,8 @@ SUPERSCRIPT_DIGITS = str.maketrans({
     "⁹": "9",
 })
 
-# CHANGED: набори маркерів, що визначають структурні зрушення документа.
-# Використовуються для (а) розпізнавання заголовків і (б) state-tracking
-# номера статті між чанками.
 APPENDIX_HEADING_PATTERN = re.compile(
-    r"^(Додаток|ЗАТВЕРДЖЕНО|ПОРЯДОК|ОСОБЛИВОСТІ|ПЕРЕЛІК)\b",
-    flags=re.IGNORECASE,
+    r"^(Додаток|ЗАТВЕРДЖЕНО|ПОРЯДОК|ОСОБЛИВОСТІ|ПЕРЕЛІК)\b"
 )
 SECTION_HEADING_PATTERN = re.compile(
     r"^(Розділ|Глава)\s+",
@@ -307,13 +274,13 @@ def extract_version_date(html: str, document_text: str) -> Optional[str]:
 
 
 def normalize_article_number(value: str) -> str:
+    cleaned = value.translate(SUPERSCRIPT_DIGITS)
+    cleaned = re.sub(r"\s+", "", cleaned)
     return (
-        value.translate(SUPERSCRIPT_DIGITS)
-        .replace("–", "-")
+        cleaned.replace("–", "-")
         .replace("—", "-")
         .replace("−", "-")
         .replace("\u00ad", "")
-        .replace(" ", "")
         .strip()
     )
 
@@ -361,19 +328,38 @@ def extract_amendments(text: str) -> tuple[str, list[str]]:
     return cleaned.strip(), amendments
 
 
+def ensure_article_breaks(text: str) -> str:
+    """Гарантує, що кожен заголовок 'Стаття N.' стоїть на власному рядку."""
+    pattern = re.compile(
+        r"(?<!\n)(?<![\w-])"
+        r"(Стаття\s+[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+"
+        r"(?:\s*[-–—−]\s*[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+)?\s*\.)",
+        flags=re.IGNORECASE,
+    )
+    return pattern.sub(r"\n\1", text)
+
+
 def is_structural_heading(line: str) -> bool:
+    """Чи виглядає рядок як структурний заголовок документа."""
     line = line.strip()
-    patterns = [
+    ci_patterns = [
         r"^Розділ\s+[IVXLCDM\d]+",
         r"^Глава\s+\d+",
         r"^Стаття\s+[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+(?:\s*[-–—−]\s*[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+)?\s*\.",
+    ]
+    if any(re.match(p, line, flags=re.IGNORECASE) for p in ci_patterns):
+        return True
+
+    cs_patterns = [
         r"^Додаток\s*\d*",
         r"^ПОРЯДОК\b",
         r"^ОСОБЛИВОСТІ\b",
         r"^ПЕРЕЛІК\b",
         r"^ЗАТВЕРДЖЕНО\b",
     ]
-    return any(re.match(pattern, line, flags=re.IGNORECASE) for pattern in patterns)
+    if any(re.match(p, line) for p in cs_patterns):
+        return True
+    return False
 
 
 def extract_heading_from_text(text: str, fallback: str) -> str:
@@ -398,10 +384,6 @@ def extract_heading_from_text(text: str, fallback: str) -> str:
     if match:
         return match.group(0).strip()[:240]
 
-    # CHANGED: Раніше тут ми брали "перший рядок ≥12 символів", що породжувало
-    # 253 заголовки з малої літери (фрагменти речень). Тепер вимагаємо, щоб
-    # рядок починався з великої літери та закінчувався розділовим знаком —
-    # інакше повертаємо fallback (heading документа або секції зверху).
     for line in lines[:5]:
         if not line or line.startswith("("):
             continue
@@ -417,15 +399,7 @@ def extract_heading_from_text(text: str, fallback: str) -> str:
 
 
 def split_into_sections(text: str, doc_title: str) -> list[Section]:
-    """Розбиває документ на секції за структурними заголовками.
-
-    CHANGED: при зустрічі нового структурного заголовка перевіряємо, чи
-    попередня "секція" має достатньо змісту (>= SECTION_MIN_CHARS).
-    Якщо ні — це службова шапка типу "ЗАТВЕРДЖЕНО постановою КМУ № 1275",
-    і ми не утворюємо окремої секції (інакше отримуємо дублі-фантоми
-    з 4 однаковими 155-символьними чанками). Замість цього шапка
-    приклеюється до наступної секції.
-    """
+    """Розбиває документ на секції за структурними заголовками."""
     sections: list[Section] = []
     current_lines: list[str] = []
     current_heading = doc_title
@@ -433,8 +407,6 @@ def split_into_sections(text: str, doc_title: str) -> list[Section]:
     for line in text.splitlines():
         if is_structural_heading(line) and current_lines:
             section_text = "\n".join(current_lines).strip()
-            # CHANGED: не "відрізаємо" дрібну секцію-шапку — продовжуємо
-            # збирати рядки далі, щоб вона прилипла до наступної основної секції.
             if len(section_text) < SECTION_MIN_CHARS:
                 current_lines.append(line)
                 # heading секції оновлюємо на новий, бо він точніше
@@ -469,13 +441,7 @@ def find_safe_break(text: str, max_chars: int) -> int:
 
 
 def split_large_section(text: str) -> list[str]:
-    """Ділить велику секцію на чанки з overlap.
-
-    CHANGED: якщо останній шматок коротший за CHUNK_MIN_CHARS, він тепер
-    приклеюється до попереднього чанка (з urізаним overlap), а не утворює
-    окремий ультра-короткий чанк. Це усуває "хвости" розділу довжиною
-    150-300 символів, які раніше потрапляли в датасет.
-    """
+    """Ділить велику секцію на чанки з overlap."""
     if len(text) <= CHUNK_MAX_CHARS:
         return [text.strip()]
 
@@ -514,12 +480,7 @@ def split_large_section(text: str) -> list[str]:
 
 
 def normalize_inline_text(text: str) -> str:
-    """Гарне inline-нормалізування з очищенням артефактів конкатенації.
-
-    CHANGED: попередня версія чистила лише ":.", "?.", "!.". Тепер
-    додатково усуваємо ".." (поза еліпсисом), ";.", ",.", " .", " ;",
-    "  " — все, що з'являлось через конкатенацію heading + body.
-    """
+    """Гарне inline-нормалізування з очищенням артефактів конкатенації."""
     text = re.sub(r"\s+", " ", text).strip()
 
     # Прибрати пробіли перед розділовими знаками: "слово ." → "слово."
@@ -572,13 +533,7 @@ def extract_legal_numbers(
     text: str,
     inherited_article: Optional[str] = None,
 ) -> dict[str, Optional[str]]:
-    """Витягує article/part/paragraph номери з тексту чанка.
-
-    CHANGED: підтримує `inherited_article` — якщо в самому тексті чанка
-    немає рядка "Стаття N" (типово для chunk_index > 0 у великій секції),
-    використовуємо номер статті, який було визначено на рівні секції.
-    Це піднімає coverage `article_number` для законів з ~50% до ~99%.
-    """
+    """Витягує article/part/paragraph номери з тексту чанка."""
     article_match = re.search(
         r"Стаття\s+([0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+(?:\s*[-–—−]\s*[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]+)?)\s*\.",
         text,
@@ -615,12 +570,7 @@ def extract_legal_numbers(
 
 
 def clean_heading_for_breadcrumb(heading: str) -> str:
-    """Готує heading до вставки у breadcrumb.
-
-    CHANGED: видаляє завершальну пунктуацію (`;`, `,`, `:`, `.`, пробіли),
-    обмежує довжину до 100 символів за межею слова. Це усуває артефакти
-    типу `breadcrumb` = "...закупівель;. підпункт/абзац 15: ...".
-    """
+    """Готує heading до вставки у breadcrumb."""
     cleaned = heading.strip()
     cleaned = re.sub(r"[\s;,:\.]+$", "", cleaned)
     if len(cleaned) > 100:
@@ -630,12 +580,7 @@ def clean_heading_for_breadcrumb(heading: str) -> str:
 
 def is_meaningful_heading(heading: str) -> bool:
     """True, якщо heading — це справжній структурний заголовок, а не
-    обірваний фрагмент речення.
-
-    CHANGED: ця перевірка дозволяє build_breadcrumb _не_ вставляти у
-    breadcrumb уривки речень (lowercase початки, відсутність структурного
-    маркера) — джерело попередніх 224 надмірно довгих breadcrumb'ів.
-    """
+    обірваний фрагмент речення."""
     if not heading:
         return False
     stripped = heading.strip()
@@ -659,12 +604,7 @@ def build_breadcrumb(
     heading: str,
     legal_numbers: dict[str, Optional[str]],
 ) -> str:
-    """Будує breadcrumb для контексту.
-
-    CHANGED: heading вставляється тільки якщо він — справжній заголовок
-    (`is_meaningful_heading`), а не обірване речення. Завершальна
-    пунктуація heading чиститься через `clean_heading_for_breadcrumb`.
-    """
+    """Будує breadcrumb для контексту."""
     parts = [doc_title]
 
     if version_date:
@@ -685,20 +625,7 @@ def build_breadcrumb(
 
 
 def build_chunks(text: str, doc: dict[str, Any], version_date: Optional[str]) -> list[dict[str, Any]]:
-    """Будує чанки документа зі stateful tracking номера статті.
-
-    CHANGED, ключові зміни:
-    1. `current_article` тримає номер останньої побаченої статті, що
-       успадковується наступними секціями (доти, доки не зустрінеться нова
-       стаття або службовий маркер додатка/розділу).
-    2. `section_heading` для chunk_index > 0 успадковується з першого
-       чанка секції (ми не намагаємось знайти "новий" heading у тілі
-       продовження).
-    3. `text` тепер чистий, без префіксу breadcrumb. Контекст у полі
-       `breadcrumb` — окремо, як і має бути. Прикладна логіка може
-       будувати `text_for_embedding = breadcrumb + "\\n\\n" + text` за
-       потреби, але збереження їх роздільно — гнучкіше.
-    """
+    """Будує чанки документа зі stateful tracking номера статті."""
     chunks: list[dict[str, Any]] = []
     current_article: Optional[str] = None
 
@@ -714,9 +641,6 @@ def build_chunks(text: str, doc: dict[str, Any], version_date: Optional[str]) ->
 
         for chunk_index, chunk_text in enumerate(section_chunks):
             clean_chunk = normalize_inline_text(chunk_text)
-
-            # CHANGED: heading завжди успадковується від секції, не
-            # витягується з тіла продовження великої секції.
             heading = section.heading
 
             legal_numbers = extract_legal_numbers(
@@ -743,11 +667,7 @@ def make_chunk_id(doc_id: str, text: str, index: int) -> str:
 
 
 def deduplicate_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """CHANGED: прибирає чанки з повністю ідентичним текстом.
-
-    На минулій ітерації знайдено 4 ідентичних "ЗАТВЕРДЖЕНО постановою КМУ
-    № 1275" в одному документі. Це лишали б 4 однакових вектора в індексі.
-    """
+    """прибирає чанки з повністю ідентичним текстом."""
     seen: set[str] = set()
     result: list[dict[str, Any]] = []
     for chunk in chunks:
@@ -795,14 +715,13 @@ def process_document(doc: dict[str, Any]) -> list[dict[str, Any]]:
 
     text, amendments = extract_amendments(text)
     text = clean_text(text)
-
+    text = ensure_article_breaks(text)
     validate_text(doc, text, version_date)
 
     chunks = build_chunks(text, doc, version_date)
     if not chunks:
         raise ValueError("No chunks created")
 
-    # CHANGED: дедуплікація чанків з ідентичним text
     chunks = deduplicate_chunks(chunks)
 
     source_host = urlparse(source_url).netloc
@@ -828,9 +747,6 @@ def process_document(doc: dict[str, Any]) -> list[dict[str, Any]]:
             "article_number": chunk["article_number"],
             "part_number": chunk["part_number"],
             "paragraph_number": chunk["paragraph_number"],
-            # CHANGED: перейменовано з amendments_removed_count, щоб було
-            # очевидно: це per-document метрика (та ж сама для всіх
-            # чанків одного документа), а не per-chunk.
             "doc_amendments_removed_count": len(amendments),
             "text": chunk["text"],
         })
