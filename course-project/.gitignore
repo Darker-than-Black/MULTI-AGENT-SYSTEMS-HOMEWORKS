@@ -9,6 +9,7 @@ build/
 dist/
 app_review/
 app_fix_reports/
+.deepeval/
 
 # Virtual environments
 .venv/
