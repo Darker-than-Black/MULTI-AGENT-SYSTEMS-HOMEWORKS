@@ -11,7 +11,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from config import settings
-from schemas import WorkerResponse
+from schemas import GraphState, WorkerResponse
 from tools.rag import rag_search
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -60,3 +60,8 @@ def invoke_lawyer(query: str) -> WorkerResponse:
         {"messages": [HumanMessage(content=query)]}
     )
     return result["structured_response"]
+
+
+def lawyer_node(state: GraphState) -> dict:
+    subtask = state["plan"].subtasks[0]
+    return {"worker_responses": [invoke_lawyer(subtask.query)]}

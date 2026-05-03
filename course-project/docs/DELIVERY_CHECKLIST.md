@@ -110,47 +110,47 @@
 > **Кінець фази:** Planner класифікує запит → правильний worker відповідає → користувач отримує відповідь.
 
 ### 2.1 Tavily web_search tool
-- [ ] `tools/web_search.py` — обгортка над Tavily API
-- [ ] Pre-config: `language=uk`, `country=UA`
-- [ ] Підтримка `allowed_domains` параметра
-- [ ] Post-filter: language detection через `langdetect`, drop non-UA
-- [ ] Trim snippets до N символів
-- [ ] Unit-тест на mock Tavily response
+- [x] `tools/web_search.py` — обгортка над Tavily API
+- [x] Pre-config: `language=uk`, `country=UA`
+- [x] Підтримка `allowed_domains` параметра
+- [x] Post-filter: language detection через `langdetect`, drop non-UA
+- [x] Trim snippets до N символів
+- [x] Unit-тест на mock Tavily response
 
 ### 2.2 Common Support Agent
-- [ ] `agents/common_support.py`
-- [ ] System prompt у `prompts/common_support.md` з доменними обмеженнями
-- [ ] Tools: `rag_search` (колекція `articles`) + `web_search` (без whitelist)
-- [ ] Output: `WorkerResponse`
+- [x] `agents/common_support.py`
+- [x] System prompt у `prompts/common_support.md` з доменними обмеженнями
+- [x] Tools: `rag_search` (колекція `articles`) + `web_search` (без whitelist)
+- [x] Output: `WorkerResponse`
 
 ### 2.3 Technical Support Agent
-- [ ] `agents/technical_support.py`
-- [ ] System prompt з логікою "повертай needs_human=True якщо це опис баги/відсутньої функції"
-- [ ] Tools: `rag_search` з pre-filter за tags + `web_search` з `allowed_domains`
-- [ ] Output: `WorkerResponse`
+- [x] `agents/technical_support.py`
+- [x] System prompt з логікою "повертай needs_human=True якщо це опис баги/відсутньої функції"
+- [x] Tools: `rag_search` з pre-filter за tags + `web_search` з `allowed_domains`
+- [x] Output: `WorkerResponse`
 
 ### 2.4 Planner Agent
-- [ ] `agents/planner.py`
-- [ ] System prompt з прикладами класифікації (off-topic / escalation / single subtask)
-- [ ] Output: `ResearchPlan` через `with_structured_output`
-- [ ] **На цьому етапі обмежити `subtasks` максимум 1 елементом** — це single-topic фаза
-- [ ] Окремі тести для off-topic, escalation, on-topic кейсів
+- [x] `agents/planner.py`
+- [x] System prompt з прикладами класифікації (off-topic / escalation / single subtask)
+- [x] Output: `ResearchPlan` через `with_structured_output`
+- [x] **На цьому етапі обмежити `subtasks` максимум 1 елементом** — це single-topic фаза
+- [x] Окремі тести для off-topic, escalation, on-topic кейсів
 
 ### 2.5 LangGraph: базовий граф (без fan-out, без Critic)
-- [ ] `supervisor.py` — `build_graph()` з nodes: `planner`, `off_topic_response`, `lawyer`, `common_support`, `technical_support`, `final_response`
-- [ ] Conditional edges: `route_after_planner` (off-topic / escalation / route to single worker)
-- [ ] **Без** `escalation_node` поки що — заглушка, що друкує "TODO escalate"
-- [ ] State: `GraphState` (без `worker_responses` reducer наразі — single value)
+- [x] `supervisor.py` — `build_graph()` з nodes: `planner`, `off_topic_response`, `lawyer`, `common_support`, `technical_support`, `final_response`
+- [x] Conditional edges: `route_after_planner` (off-topic / escalation / route to single worker)
+- [x] **Без** `escalation_node` поки що — заглушка, що друкує "TODO escalate"
+- [x] State: `GraphState` (поточна реалізація з `worker_responses` як списком сумісна з single-topic Phase 2 і Phase 3 fan-out)
 
 ### 2.6 Інтеграція з main.py
-- [ ] Замінити прямий виклик lawyer на `graph.invoke()`
-- [ ] In-memory checkpointer (`MemorySaver`) — Postgres підключимо пізніше
-- [ ] Перевірити 4 типи запитів: legal, general, technical, off-topic
+- [x] Замінити прямий виклик lawyer на `graph.invoke()`
+- [x] In-memory checkpointer (`MemorySaver`) — Postgres підключимо пізніше
+- [x] Перевірити 4 типи запитів: legal, general, technical, off-topic
 
 ### 2.7 Section labels (двомовність)
-- [ ] `language.py` — мапа `topic → label` для UK і EN
-- [ ] `final_response.py` — формування markdown з секціями (поки тільки 1 секція = 1 worker, але код готовий для багатьох)
-- [ ] Skip пустих секцій (`found=False` без контенту)
+- [x] `language.py` — мапа `topic → label` для UK і EN
+- [x] `final_response.py` — формування markdown з секціями (поки тільки 1 секція = 1 worker, але код готовий для багатьох)
+- [x] Skip пустих секцій (`found=False` без контенту)
 
 **🎯 Milestone 2:** Planner-driven routing працює, всі 3 workers відповідають, off-topic відсіюється.
 

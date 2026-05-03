@@ -1,0 +1,54 @@
+"""Technical Support worker for Prozorro platform and procedural support queries."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from langchain_core.messages import HumanMessage
+from langgraph.prebuilt import create_react_agent
+
+from agents.lawyer import get_llm
+from config import settings
+from schemas import WorkerResponse
+from tools.rag import make_rag_search_articles
+from tools.web_search import make_web_search_with_domains, web_search
+
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (_PROMPTS_DIR / "technical_support.md").read_text(encoding="utf-8")
+
+
+def build_technical_support_agent():  # type: ignore[return]
+    tag_whitelist = settings.tech_support_tag_whitelist or None
+    allowed_domains = settings.tech_support_allowed_domains
+    rag_tool = make_rag_search_articles(tag_whitelist=tag_whitelist)
+    web_tool = (
+        make_web_search_with_domains(allowed_domains)
+        if allowed_domains
+        else web_search
+    )
+    return create_react_agent(
+        model=get_llm(),
+        tools=[rag_tool, web_tool],
+        prompt=_load_system_prompt(),
+        response_format=WorkerResponse,
+    )
+
+
+_technical_support = None
+
+
+def get_technical_support_agent():  # type: ignore[return]
+    global _technical_support
+    if _technical_support is None:
+        _technical_support = build_technical_support_agent()
+    return _technical_support
+
+
+def invoke_technical_support(query: str) -> WorkerResponse:
+    result = get_technical_support_agent().invoke(
+        {"messages": [HumanMessage(content=query)]}
+    )
+    return result["structured_response"]

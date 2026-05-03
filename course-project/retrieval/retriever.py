@@ -15,7 +15,7 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from pydantic import BaseModel
-from qdrant_client.models import FieldCondition, Filter, MatchValue
+from qdrant_client.models import FieldCondition, Filter, MatchAny, MatchValue
 
 from config import settings
 from retrieval.embeddings import get_embedder
@@ -57,7 +57,12 @@ class _QdrantRetriever(BaseRetriever):
         if self.filters:
             qdrant_filter = Filter(
                 must=[
-                    FieldCondition(key=k, match=MatchValue(value=v))
+                    FieldCondition(
+                        key=k,
+                        match=MatchAny(any=v)
+                        if isinstance(v, list)
+                        else MatchValue(value=v),
+                    )
                     for k, v in self.filters.items()
                 ]
             )

@@ -1,11 +1,37 @@
-"""Entry point: CLI REPL backed by the Lawyer agent (Phase 1)."""
+"""Entry point: CLI REPL backed by the Phase 2 supervisor graph."""
+
+from __future__ import annotations
+
+from uuid import uuid4
 
 from config import settings
+from schemas import GraphState
+from supervisor import graph
+
+
+def sanitize_terminal_text(text: str) -> str:
+    return text.encode("utf-8", errors="surrogateescape").decode(
+        "utf-8",
+        errors="replace",
+    )
+
+
+def build_initial_state(user_message: str, session_id: str) -> GraphState:
+    return {
+        "user_message": sanitize_terminal_text(user_message),
+        "session_id": session_id,
+        "user_id": "cli-user",
+        "plan": None,
+        "worker_responses": [],
+        "critic_history": [],
+        "retry_count": 0,
+        "aggregated_response": None,
+        "escalated": False,
+        "final_response": None,
+    }
 
 
 def main() -> None:
-    from agents.lawyer import invoke_lawyer  # deferred to keep startup fast when not needed
-
     print(f"Prozorro Assistant  [{settings.llm_provider}/{settings.llm_model}]")
     print("Введіть запитання або 'exit' для виходу.\n")
 
@@ -21,21 +47,16 @@ def main() -> None:
             print("До побачення!")
             break
 
-        response = invoke_lawyer(user_input)
+        session_id = str(uuid4())
+        initial_state = build_initial_state(user_input, session_id)
+        result = graph.invoke(
+            initial_state,
+            {"configurable": {"thread_id": session_id}},
+        )
 
-        if not response.found:
-            print("Відповідь не знайдена: запит поза межами бази знань.\n")
-            continue
-
-        print(f"\nВідповідь: {response.answer}")
-        print(f"Впевненість: {response.confidence:.0%}")
-        if response.sources:
-            print("Джерела:")
-            for src in response.sources:
-                url_part = f"  {src.url}" if src.url else ""
-                print(f"  • {src.title}  [{src.doc_id}]{url_part}")
-        if response.needs_human:
-            print(f"\n⚠ Потрібна консультація фахівця: {response.needs_human_reason}")
+        print(f"\n{result['final_response']}")
+        if result.get("escalated"):
+            print("Запит позначено для подальшого опрацювання фахівцем.")
         print()
 
 

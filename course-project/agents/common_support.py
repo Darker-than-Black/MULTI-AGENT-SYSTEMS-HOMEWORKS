@@ -1,0 +1,45 @@
+"""Common Support worker for general procurement guidance and current public info."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from langchain_core.messages import HumanMessage
+from langgraph.prebuilt import create_react_agent
+
+from agents.lawyer import get_llm
+from schemas import WorkerResponse
+from tools.rag import make_rag_search_articles
+from tools.web_search import web_search
+
+_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+
+
+def _load_system_prompt() -> str:
+    return (_PROMPTS_DIR / "common_support.md").read_text(encoding="utf-8")
+
+
+def build_common_support_agent():  # type: ignore[return]
+    return create_react_agent(
+        model=get_llm(),
+        tools=[make_rag_search_articles(), web_search],
+        prompt=_load_system_prompt(),
+        response_format=WorkerResponse,
+    )
+
+
+_common_support = None
+
+
+def get_common_support_agent():  # type: ignore[return]
+    global _common_support
+    if _common_support is None:
+        _common_support = build_common_support_agent()
+    return _common_support
+
+
+def invoke_common_support(query: str) -> WorkerResponse:
+    result = get_common_support_agent().invoke(
+        {"messages": [HumanMessage(content=query)]}
+    )
+    return result["structured_response"]
