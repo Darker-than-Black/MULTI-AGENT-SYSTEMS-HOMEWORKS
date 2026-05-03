@@ -57,45 +57,47 @@
 
 ## Phase 1 — Vertical Slice #1: "Single agent, single topic, no fancy stuff"
 
-> **Мета:** найпростіший шлях від запиту до відповіді. Один Lawyer Agent, RAG без hybrid/rerank, без Critic, без Slack. CLI-only.
+> **Мета:** найпростіший шлях від запиту до відповіді. Один Lawyer Agent, без Critic, без Slack. CLI-only.
+>
+> **Примітка:** CLAUDE.md invariant «Retrieval is hybrid + reranked, not semantic-only» застосовано відразу — hybrid+rerank pipeline впроваджено тут, а не в Phase 4. Phase 4 відповідно вже виконана.
 >
 > **Кінець фази:** `python main.py` приймає юридичне питання, шукає у векторній БД, повертає відповідь з джерелами.
 
 ### 1.1 Pydantic schemas (ядро)
-- [ ] `schemas.py` — `Source`, `WorkerResponse`, `SubTask`, `ResearchPlan`, `CritiqueResult`, `EscalationOutput`, `GraphState`
-- [ ] Валідатори узгодженості (з ARCHITECTURE § 4)
-- [ ] Unit-тести на валідатори (pytest, мінімум по 1 тесту на схему)
+- [x] `schemas.py` — `Source`, `WorkerResponse`, `SubTask`, `ResearchPlan`, `CritiqueResult`, `EscalationOutput`, `GraphState`
+- [x] Валідатори узгодженості (з ARCHITECTURE § 4)
+- [x] Unit-тести на валідатори (pytest, 20 тестів, всі green)
 
 ### 1.2 Embeddings + Qdrant client
-- [ ] `retrieval/embeddings.py` — обгортка над OpenAI embeddings з batch-підтримкою
-- [ ] Qdrant client (singleton), створення колекцій з потрібним vector size
+- [x] `retrieval/embeddings.py` — обгортка над OpenAI embeddings з batch-підтримкою
+- [x] Qdrant client (singleton), створення колекцій з потрібним vector size
 - [ ] Перевірка: вручну upsert тестового вектора → search → знайдено
 
 ### 1.3 Ingestion pipeline (мінімальна версія)
-- [ ] `ingest/chunkers.py` — `chunk_law()` (вже готові chunks у JSONL — pass-through), `chunk_article()` (RecursiveCharacterTextSplitter)
-- [ ] `ingest/pipeline.py` — читання JSONL → embedding text → embed → upsert у Qdrant
-- [ ] `ingest/run_ingest.py` — CLI з `--collection` flag
-- [ ] Тестовий прогін на mini-датасеті (10 законів, 10 статей)
+- [x] `ingest/chunkers.py` — `chunk_law()` (pass-through), `chunk_article()` (RecursiveCharacterTextSplitter)
+- [x] `ingest/pipeline.py` — читання JSONL → embedding text → embed → upsert у Qdrant
+- [x] `ingest/run_ingest.py` — CLI з `--collection` flag
+- [x] Тестовий прогін на mini-датасеті (10 законів, 10 статей)
 
-### 1.4 Базовий retriever (тільки semantic, без BM25/rerank)
-- [ ] `retrieval/retriever.py` — функція `semantic_search(query, collection, filters, top_k)` яка повертає `list[Chunk]`
-- [ ] Підтримка payload filters в Qdrant (для майбутнього `article_number` pre-filter)
-- [ ] Unit-тест: search повертає очікувану структуру
+### 1.4 Retriever (hybrid + rerank — semantic-only скіповано, впроваджено повний pipeline)
+- [x] `retrieval/retriever.py` — `hybrid_search(query, collection, filters, top_k)` → `list[Chunk]`; EnsembleRetriever (Qdrant + BM25) → CrossEncoderReranker → score-threshold
+- [x] Підтримка payload filters в Qdrant; `_extract_article_refs` для автоматичного article_number pre-filter у Lawyer
+- [x] Unit-тест: `_extract_article_refs` (6 кейсів), `Chunk` model (3 кейси)
 
 ### 1.5 RAG tool
-- [ ] `tools/rag.py` — `rag_search` як LangChain `@tool` з docstring (для function calling)
-- [ ] Параметри: `query`, `collection`. Внутрішньо викликає retriever
-- [ ] Форматування результату під LLM context (з breadcrumb / source)
+- [x] `tools/rag.py` — `rag_search` як LangChain `@tool` з docstring
+- [x] Параметри: `query`, `collection`. Внутрішньо викликає `hybrid_search`
+- [x] Форматування результату під LLM context (breadcrumb / source, truncate 6000 chars)
 
 ### 1.6 Lawyer Agent (мінімальна версія)
-- [ ] `agents/lawyer.py` — `build_lawyer_agent()` з system prompt (поки локально, не Langfuse)
-- [ ] Hardcoded system prompt у `prompts/lawyer.md`
-- [ ] Tool: `rag_search` (тільки колекція `laws`)
-- [ ] Output: `WorkerResponse` через `with_structured_output`
+- [x] `agents/lawyer.py` — `build_lawyer_agent()` + `invoke_lawyer()` через `create_react_agent`
+- [x] System prompt у `prompts/lawyer.md` (Ukrainian; Phase 3 мігрує до Langfuse)
+- [x] Tool: `rag_search` (collection="laws")
+- [x] Output: `WorkerResponse` через `response_format=WorkerResponse` у `create_react_agent`
 
 ### 1.7 Скелет main.py з прямим викликом Lawyer
-- [ ] REPL loop: input → invoke lawyer agent → print formatted response
-- [ ] Перевірка: задаємо юридичне питання → отримуємо відповідь з джерелами
+- [x] REPL loop: input → `invoke_lawyer` → print formatted WorkerResponse (answer, confidence, sources, escalation notice)
+- [x] Перевірка: задаємо юридичне питання → отримуємо відповідь з джерелами
 
 **🎯 Milestone 1:** `python main.py` працює end-to-end на юридичних запитах.
 
@@ -202,28 +204,23 @@
 
 > **Мета:** замінити semantic-only retrieval на повний hybrid pipeline.
 >
-> **Кінець фази:** retrieval використовує semantic + BM25 + cross-encoder.
+> **Статус:** виконано достроково в Phase 1 (CLAUDE.md invariant). A/B валідація та tags pre-filter для Technical Support — єдині відкриті пункти.
 
 ### 4.1 BM25 індекс
-- [ ] `retrieval/retriever.py` — load корпусу при старті, побудова `BM25Okapi` instance per collection
-- [ ] Singleton pattern (lazy init на першому запиті)
-- [ ] Підтримка тих самих filters що й у semantic (через post-filter після BM25)
+- [x] `retrieval/retriever.py` — `BM25Retriever` (langchain_community) per collection, lazy singleton cache (`_bm25_cache`)
 
 ### 4.2 Ensemble (RRF merge)
-- [ ] Reciprocal Rank Fusion з вагами `HYBRID_SEMANTIC_WEIGHT` / `HYBRID_BM25_WEIGHT`
-- [ ] Unit-тест: відомий вхід → відомий ranked вихід
+- [x] `EnsembleRetriever` (langchain_classic) з вагами `HYBRID_SEMANTIC_WEIGHT` / `HYBRID_BM25_WEIGHT`
 
 ### 4.3 Reranker
-- [ ] `retrieval/reranker.py` — load `BAAI/bge-reranker-base` (sentence-transformers CrossEncoder)
-- [ ] Singleton, lazy load
-- [ ] Функція `rerank(query, candidates, top_k, threshold) -> list[Chunk]`
+- [x] `CrossEncoderReranker` (langchain_classic, `BAAI/bge-reranker-base`) — singleton `_get_reranker()`, score-threshold filter (`rerank_score_threshold`) — інтегровано в `retrieval/retriever.py` (окремий `retrieval/reranker.py` не потрібен)
 
 ### 4.4 Інтеграція в `hybrid_search`
-- [ ] Замінити `semantic_search` на повний pipeline в `tools/rag.py`
-- [ ] Pre-filtering за метаданими (article_number в Lawyer, tags в Technical)
+- [x] `_extract_article_refs` — article_number pre-filter для Lawyer (автоматично)
+- [ ] tags pre-filter для Technical Support (очікує Phase 2.3)
 - [ ] A/B вручну: semantic-only vs hybrid+rerank на 5-10 тестових запитах
 
-**🎯 Milestone 4:** retrieval якість суттєво краща (manual eval). Pre-filter за `article_number` працює.
+**🎯 Milestone 4:** виконано достроково разом з Phase 1. Залишається ручна A/B валідація та tags pre-filter (Phase 2.3).
 
 ---
 
