@@ -17,7 +17,7 @@ def search_knowledge_base(query: str, collection: str = "articles") -> str:
 
     Use this for questions about product behavior, FAQs, tutorials,
     and policy documents. The `collection` argument selects the index:
-    'laws' for legal references, 'articles' for everything else.
+    'laws' for legal patterns, 'articles' for everything else.
     """
     # ... implementation
     return formatted_results

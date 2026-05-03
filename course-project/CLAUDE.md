@@ -63,12 +63,11 @@ The full per-item checklist is in **`docs/DELIVERY_CHECKLIST.md` → "Definition
 
 ## Reference patterns from lectures
 
-Lecture-derived patterns are stored in **`.claude/references/`** as compact, single-topic markdown files (one pattern per file, with minimal example + pitfalls). Use these as the authoritative source for framework APIs — they reflect the exact versions taught in the course, which is more reliable than memory for fast-moving libraries (LangChain 1.x, LangGraph, Langfuse, DeepEval).
+Lecture-derived patterns are stored in **`docs/patterns/`** as compact, single-topic markdown files (one pattern per file, with minimal example + pitfalls). Use these as the authoritative source for framework APIs — they reflect the exact versions taught in the course, which is more reliable than memory for fast-moving libraries (LangChain 1.x, LangGraph, Langfuse, DeepEval).
 
 Workflow:
 
-- Before invoking a framework feature you haven't used in this repo yet, list `.claude/references/` and read the matching file (e.g. `langgraph_fanout_with_send.md` before adding fan-out, `deepeval_geval_pattern.md` before writing a custom metric).
-- If a needed pattern isn't covered, the source notebooks are in `docs/lectures/` (lessons 5–12). Extract the minimal example into a new `references/` file in the same format rather than dumping the whole lecture into context.
+- Before invoking a framework feature you haven't used in this repo yet, list `docs/patterns/` and read the matching file (e.g. `langgraph_fanout_with_send.md` before adding fan-out, `deepeval_geval_pattern.md` before writing a custom metric).
 - References are the *first* place to look. Memory is the *last*.
 
 ## Common commands

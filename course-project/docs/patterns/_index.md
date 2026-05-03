@@ -4,7 +4,7 @@ Lecture-derived patterns, one file per concept. Use as the **first** source for 
 
 ## When to read
 
-Before invoking a framework feature you haven't used in this repo yet. Fast discovery: `ls .claude/references/` then read the relevant file (or this index).
+Before invoking a framework feature you haven't used in this repo yet. Fast discovery: `ls docs/patterns/` then read the relevant file (or this index).
 
 ## Catalog
 
