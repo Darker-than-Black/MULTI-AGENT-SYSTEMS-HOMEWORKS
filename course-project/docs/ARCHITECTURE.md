@@ -42,6 +42,22 @@
 | Тестування | deepeval + pytest | latest | Component + e2e evals |
 | Мова detection | langdetect | latest | Web search results filter |
 
+### 2.1 Принципи використання стеку
+
+> Розгорнуті правила роботи з кодом — у `CLAUDE.md`. Тут — стек-специфічні наслідки.
+
+**Library-first.** Кожен компонент стеку обрано тому, що дає готове рішення для нашої задачі. Перш ніж писати власну логіку — перевір, чи бібліотека вже це робить:
+
+- Структурований output → `with_structured_output(SchemaModel)`, не ручний JSON parsing.
+- Chunking → `RecursiveCharacterTextSplitter`, не власна логіка розбиття.
+- Hybrid retrieval → `EnsembleRetriever` з LangChain, не ручний RRF (якщо API підходить).
+- Tool definition → `@tool` декоратор, не ручні JSON schemas.
+- Memory → `PostgresSaver` (LangGraph checkpointer), не власна serialization логіка.
+- Tracing → Langfuse `CallbackHandler`, не ручне логування.
+- HITL → `HumanInTheLoopMiddleware` (LangGraph), не власні interrupt-механізми.
+
+Власний код пишемо тільки коли бібліотека не покриває кейс — і документуємо причину в docstring модуля.
+
 ---
 
 ## 3. Структура модулів
@@ -786,3 +802,4 @@ services:
 | 8 | Section-based aggregation | LLM-aggregator | Дешевше, передбачуваніше, легше тестувати |
 | 9 | Static off-topic / escalation messages | LLM-генеровані | Передбачувана UX, без ризику галюцинацій на критичних шляхах |
 | 10 | Langfuse Prompt Mgmt | Захардкожені prompts | A/B тестування, версіонування, switching без redeploy |
+| 11 | Library-first development | Власна реалізація для контролю | Менше підтримки, кращий fit з ecosystem'ом, швидше до результату; стек обрано саме за повноту фіч |
