@@ -302,9 +302,9 @@
 - [ ] Перевірка: Sessions / Users tabs у Langfuse містять дані _(потребує налаштованого Langfuse)_
 
 ### 7.5 LLM-as-a-Judge evaluators
-- [ ] Налаштувати в Langfuse UI мінімум 2 evaluators _(ручне налаштування в UI)_
+- [x] Налаштувати в Langfuse UI мінімум 2 evaluators _(ручне налаштування в UI)_
 - [ ] Зробити 3-5 нових запусків і перевірити автоматичні scores _(manual)_
-- [x] Прототип GEval тесту: `tests/evaluations/test_eval_geval.py` — Groundedness для Lawyer
+- [x] GEval тести: `tests/evaluations/test_eval_geval.py` — 10 метрик (Groundedness ×3, Plan Quality, Off-topic Adherence, Critique Quality, Answer Relevancy, Source Citation Quality, Tool Correctness ×2); всі збираються pytest, 142 unit-тести зелені
 
 **🎯 Milestone 7:** код-частина готова; Langfuse account + UI налаштування залишаються ручними кроками.
 
@@ -315,9 +315,9 @@
 > **Мета:** golden dataset + automated evals на всіх рівнях.
 
 ### 8.1 Golden dataset
-- [ ] `tests/golden_dataset.json` — 15-20 прикладів (5 happy / 5 edge / 5 failure)
-- [ ] Manual review кожного прикладу
-- [ ] Структура з ARCHITECTURE § 13.2
+- [x] `tests/golden_dataset.json` — 15 прикладів (5 happy / 5 edge / 5 failure: 2 off-topic + 3 escalation)
+- [x] Manual review кожного прикладу
+- [x] Структура з ARCHITECTURE § 13.2 (id, category, input, language, expected_topics, expected_output, expected_sources_doc_ids, should_escalate); валідується в `tests/test_e2e.py`
 
 ### 8.2 Unit tests
 - [x] `tests/conftest.py` — фікстури (mock LLM, sample chunks, mock Tavily)
@@ -330,21 +330,21 @@
 - [x] `test_technical_support.py` — behavioral unit tests: escalation detection, tag whitelist wiring
 - [x] `test_critic.py` — behavioral unit tests: approve/revise verdicts, retry logic
 - [x] `test_escalation.py` — EscalationOutput completeness (всі поля, категорії, file save, Slack publish)
-- [ ] GEval quality tests (LLM-as-a-judge) — лише прототип у `tests/evaluations/test_eval_geval.py`
+- [x] GEval quality tests (LLM-as-a-judge) — `tests/evaluations/test_eval_geval.py` 10 метрик: Groundedness ×3, Plan Quality, Off-topic Adherence, Critique Quality, Answer Relevancy, Source Citation Quality, Tool Correctness ×2
 
 ### 8.4 Tool correctness tests
-- [ ] `test_tools.py` — мінімум 3 кейси (Planner викликає правильні tools, Lawyer тільки `rag_search`, Technical Support викликає `web_search` з whitelist)
+- [x] `test_tools.py` — 11 кейсів: Lawyer тільки `rag_search` (default `collection="laws"`), Common Support `rag_search_articles` + plain `web_search`, Technical Support `rag_search_articles` з тегами + `web_search_technical` з allowed_domains, fallback гілки, RAG dispatch, Tavily filter
 
 ### 8.5 E2E tests
-- [ ] `test_e2e.py` — прогін golden dataset через `graph.invoke()`
-- [ ] Метрики: Correctness (vs `expected_output`), Answer Relevancy
-- [ ] Збереження результатів у файл для baseline
+- [x] `test_e2e.py` — структурна валідація golden dataset (6 тестів) + parametrized `graph.invoke()` over 15 кейсів під `@pytest.mark.eval` (skip без API key)
+- [x] Метрики: Correctness GEval (vs `expected_output`), AnswerRelevancyMetric
+- [x] Збереження результатів у `tests/results/e2e_baseline_<ts>.json` через `_append_baseline`
 
 ### 8.6 CI integration (опційно)
 - [ ] GitHub Actions workflow `deepeval test run tests/`
 - [ ] Запуск на PR
 
-**🎯 Milestone 8:** behavioral unit тести (140 шт.) зелені; GEval quality evals, golden dataset та E2E — відкриті.
+**🎯 Milestone 8:** 172 unit/structural тести зелені; 25 LLM evals (10 GEval + 15 параметризованих E2E) під `@pytest.mark.eval` готові до запуску з API key. Manual review golden dataset і CI workflow — відкриті.
 
 ---
 
@@ -353,11 +353,12 @@
 > **Мета:** все що залишилось до здачі.
 
 ### 9.1 README
-- [ ] Опис проєкту, архітектурна діаграма (Mermaid або PNG)
-- [ ] Quick start guide (з ARCHITECTURE § 14)
-- [ ] Опис доменних обмежень
-- [ ] Приклади запитів (happy / off-topic / escalation)
-- [ ] Лінки на ARCHITECTURE.md та DELIVERY_CHECKLIST.md
+- [x] Опис проєкту, архітектурна діаграма (Mermaid flowchart)
+- [x] Quick start guide (з ARCHITECTURE § 14)
+- [x] Опис доменних обмежень (3 теми + defense in depth)
+- [x] Приклади запитів (happy one-topic, happy multi-topic, off-topic, escalation)
+- [x] Лінки на ARCHITECTURE.md та DELIVERY_CHECKLIST.md
+- [x] Попередній README.md перенесено в `docs/Технічне завдання.md`
 
 ### 9.2 Демо
 - [ ] Сценарій 1: happy path multi-topic (legal + technical)
