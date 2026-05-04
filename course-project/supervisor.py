@@ -40,12 +40,18 @@ def fan_out_send(state: GraphState) -> list[Send]:
 
 
 def aggregate_responses_node(state: GraphState) -> dict:
-    deduped: dict[str, WorkerResponse] = {}
+    # Keep the best response per topic: prefer found=True and highest confidence.
+    # "Last wins" would let a bad revision response overwrite a good initial one.
+    best: dict[str, WorkerResponse] = {}
     for resp in state["worker_responses"]:
-        deduped[resp.topic] = resp
+        existing = best.get(resp.topic)
+        if existing is None:
+            best[resp.topic] = resp
+        elif resp.found and (not existing.found or resp.confidence > existing.confidence):
+            best[resp.topic] = resp
 
     topic_order = ["legal", "procurement_general", "technical_system"]
-    ordered = [deduped[t] for t in topic_order if t in deduped]
+    ordered = [best[t] for t in topic_order if t in best]
 
     sections: list[str] = []
     for resp in ordered:
@@ -63,7 +69,11 @@ def targeted_redispatcher(state: GraphState) -> dict:
 def targeted_redispatch_send(state: GraphState) -> list[Send]:
     last_critique = state["critic_history"][-1]
     sends: list[Send] = []
+    seen_topics: set[str] = set()
     for rev_req in last_critique.revision_requests:
+        if rev_req.topic in seen_topics:
+            continue
+        seen_topics.add(rev_req.topic)
         subtask = next(
             (st for st in state["plan"].subtasks if st.topic == rev_req.topic),
             None,
@@ -85,12 +95,6 @@ def off_topic_node(state: GraphState) -> dict:
     if reason:
         message = f"{message} {reason}"
     return {"final_response": message, "escalated": False}
-
-
-def route_after_aggregate(state: GraphState) -> str:
-    if any(r.needs_human for r in state.get("worker_responses", [])):
-        return "escalation_node"
-    return "critic_node"
 
 
 def final_response_node(state: GraphState) -> dict:
@@ -118,6 +122,17 @@ def route_after_critic(state: GraphState) -> str:
         return "final_response_node"
     if state["retry_count"] >= settings.critic_max_retries:
         return "escalation_node"
+    # After the first revision, approve if average score meets the minimum threshold.
+    # Prevents an overly strict Critic from looping when workers have already provided
+    # real content but can't satisfy citation-format requirements the RAG may not supply.
+    if state["retry_count"] >= 1:
+        avg = (
+            last_critique.freshness_score
+            + last_critique.completeness_score
+            + last_critique.structure_score
+        ) / 3
+        if avg >= settings.critic_min_approve_score:
+            return "final_response_node"
     return "targeted_redispatcher"
 
 
@@ -152,11 +167,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None):
     )
     for worker in ("lawyer_node", "common_support_node", "technical_support_node"):
         builder.add_edge(worker, "aggregate_responses_node")
-    builder.add_conditional_edges(
-        "aggregate_responses_node",
-        route_after_aggregate,
-        {"critic_node": "critic_node", "escalation_node": "escalation_node"},
-    )
+    builder.add_edge("aggregate_responses_node", "critic_node")
     builder.add_conditional_edges(
         "critic_node",
         route_after_critic,

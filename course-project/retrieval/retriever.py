@@ -165,11 +165,6 @@ def hybrid_search(
     )
 
     docs = pipeline.invoke(query)
-    docs = [
-        d
-        for d in docs
-        if float(d.metadata.get("relevance_score", 0.0)) >= settings.rerank_score_threshold
-    ]
 
     return [
         Chunk(

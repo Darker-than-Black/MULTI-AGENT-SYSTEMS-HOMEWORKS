@@ -73,6 +73,9 @@ class Settings(BaseSettings):
 
     # ── Agent behavior ────────────────────────────────────────────────
     critic_max_retries: int = 3
+    # After the first revision cycle, approve if avg of three Critic scores >= this.
+    # Guards against a Critic that demands perfect citations RAG can't always provide.
+    critic_min_approve_score: float = 0.5
     worker_timeout_seconds: int = 60
     planner_max_subtasks: int = 3
 

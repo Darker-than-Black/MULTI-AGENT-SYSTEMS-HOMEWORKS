@@ -143,48 +143,73 @@ def test_critique_revise_without_requests_raises_validation_error() -> None:
 
 
 class TestRouteAfterCritic:
-    def _critique(
+    def _revise(
         self,
-        verdict: str,
-        revision_requests: list[RevisionRequest] | None = None,
+        freshness: float = 0.2,
+        completeness: float = 0.2,
+        structure: float = 0.2,
     ) -> CritiqueResult:
         return CritiqueResult(
-            verdict=verdict,  # type: ignore[arg-type]
-            freshness_score=0.9 if verdict == "approve" else 0.4,
-            completeness_score=0.9 if verdict == "approve" else 0.5,
-            structure_score=0.9 if verdict == "approve" else 0.6,
-            revision_requests=revision_requests or [],
+            verdict="revise",
+            freshness_score=freshness,
+            completeness_score=completeness,
+            structure_score=structure,
+            revision_requests=[
+                RevisionRequest(topic="legal", request="x", severity="major")
+            ],
         )
 
     def test_approve_routes_to_final_response(self) -> None:
         from supervisor import route_after_critic
 
-        state = _state(retry_count=1, critic_history=[self._critique("approve")])
+        critique = CritiqueResult(
+            verdict="approve",
+            freshness_score=0.9,
+            completeness_score=0.9,
+            structure_score=0.9,
+        )
+        state = _state(retry_count=1, critic_history=[critique])
 
         assert route_after_critic(state) == "final_response_node"
 
-    def test_revise_with_remaining_retries_routes_to_redispatch(self) -> None:
+    def test_first_revise_with_low_scores_routes_to_redispatch(self) -> None:
         from config import settings
         from supervisor import route_after_critic
 
-        revise = self._critique(
-            "revise",
-            [RevisionRequest(topic="legal", request="x", severity="major")],
-        )
-        state = _state(retry_count=1, critic_history=[revise])
+        # avg = (0.2+0.2+0.2)/3 = 0.2 < 0.5 — no bypass, even after first retry
+        state = _state(retry_count=1, critic_history=[self._revise(0.2, 0.2, 0.2)])
 
         with patch.object(settings, "critic_max_retries", 3):
-            assert route_after_critic(state) == "targeted_redispatcher"
+            with patch.object(settings, "critic_min_approve_score", 0.5):
+                assert route_after_critic(state) == "targeted_redispatcher"
+
+    def test_first_revise_at_retry_zero_always_redispatches(self) -> None:
+        from config import settings
+        from supervisor import route_after_critic
+
+        # retry_count=0 means we haven't done a revision yet — always redispatch
+        state = _state(retry_count=0, critic_history=[self._revise(0.8, 0.8, 0.8)])
+
+        with patch.object(settings, "critic_max_retries", 3):
+            with patch.object(settings, "critic_min_approve_score", 0.5):
+                assert route_after_critic(state) == "targeted_redispatcher"
+
+    def test_revise_with_adequate_scores_after_retry_approves(self) -> None:
+        from config import settings
+        from supervisor import route_after_critic
+
+        # avg = (0.6+0.6+0.6)/3 = 0.6 >= 0.5 and retry_count >= 1 → bypass to final
+        state = _state(retry_count=1, critic_history=[self._revise(0.6, 0.6, 0.6)])
+
+        with patch.object(settings, "critic_max_retries", 3):
+            with patch.object(settings, "critic_min_approve_score", 0.5):
+                assert route_after_critic(state) == "final_response_node"
 
     def test_revise_at_max_retries_routes_to_escalation(self) -> None:
         from config import settings
         from supervisor import route_after_critic
 
-        revise = self._critique(
-            "revise",
-            [RevisionRequest(topic="legal", request="x", severity="major")],
-        )
-        state = _state(retry_count=3, critic_history=[revise])
+        state = _state(retry_count=3, critic_history=[self._revise(0.2, 0.2, 0.2)])
 
         with patch.object(settings, "critic_max_retries", 3):
             assert route_after_critic(state) == "escalation_node"
@@ -193,11 +218,7 @@ class TestRouteAfterCritic:
         from config import settings
         from supervisor import route_after_critic
 
-        revise = self._critique(
-            "revise",
-            [RevisionRequest(topic="legal", request="x", severity="major")],
-        )
-        state = _state(retry_count=5, critic_history=[revise])
+        state = _state(retry_count=5, critic_history=[self._revise(0.2, 0.2, 0.2)])
 
         with patch.object(settings, "critic_max_retries", 3):
             assert route_after_critic(state) == "escalation_node"

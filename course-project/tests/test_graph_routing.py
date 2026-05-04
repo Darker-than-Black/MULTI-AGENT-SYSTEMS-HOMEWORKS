@@ -74,11 +74,13 @@ def _critique_approve() -> CritiqueResult:
 
 
 def _critique_revise(topic: str = "legal") -> CritiqueResult:
+    # Scores intentionally low (avg=0.2) so they stay below critic_min_approve_score
+    # and the revise loop correctly escalates after max retries.
     return CritiqueResult(
         verdict="revise",
-        freshness_score=0.4,
-        completeness_score=0.5,
-        structure_score=0.6,
+        freshness_score=0.2,
+        completeness_score=0.2,
+        structure_score=0.2,
         revision_requests=[
             RevisionRequest(topic=topic, request="Уточни джерело.", severity="major")  # type: ignore[arg-type]
         ],

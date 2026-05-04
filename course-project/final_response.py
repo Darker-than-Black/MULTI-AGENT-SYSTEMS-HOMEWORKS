@@ -7,12 +7,16 @@ from schemas import WorkerResponse
 
 
 def aggregate(responses: list[WorkerResponse], language: str = "uk") -> str:
-    deduped: dict[str, WorkerResponse] = {}
+    best: dict[str, WorkerResponse] = {}
     for resp in responses:
-        deduped[resp.topic] = resp
+        existing = best.get(resp.topic)
+        if existing is None:
+            best[resp.topic] = resp
+        elif resp.found and (not existing.found or resp.confidence > existing.confidence):
+            best[resp.topic] = resp
 
     topic_order = ["legal", "procurement_general", "technical_system"]
-    ordered = [deduped[t] for t in topic_order if t in deduped]
+    ordered = [best[t] for t in topic_order if t in best]
 
     sections: list[str] = []
 
