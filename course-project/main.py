@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from contextlib import contextmanager
 from typing import Any, Iterator
+
+logger = logging.getLogger(__name__)
 
 from psycopg import Connection
 from psycopg.rows import dict_row
@@ -113,13 +116,20 @@ def run_slack_app(graph: Any) -> None:
         if langfuse_handler:
             config["callbacks"] = [langfuse_handler]
             config["metadata"] = {
-                "user_id": user_id,
-                "session_id": session_id,
-                "tags": "procurement-support,slack",
+                "langfuse_user_id": user_id,
+                "langfuse_session_id": session_id,
+                "langfuse_tags": ["procurement-support", "slack"],
             }
 
-        result = graph.invoke(initial_state, config)
-        say(text=result["final_response"], thread_ts=thread_ts)
+        try:
+            result = graph.invoke(initial_state, config)
+            say(text=result["final_response"], thread_ts=thread_ts)
+        except Exception:
+            logger.exception("Graph invocation failed for session %s", session_id)
+            say(
+                text="Вибачте, під час обробки вашого запиту сталася технічна помилка. Спробуйте, будь ласка, ще раз.",
+                thread_ts=thread_ts,
+            )
 
     if socket_mode:
         print("Starting Slack Bolt App in Socket Mode...")

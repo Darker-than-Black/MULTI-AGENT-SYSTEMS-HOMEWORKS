@@ -298,8 +298,8 @@
 - [ ] Перевірка: змінити prompt в Langfuse → нова поведінка без redeploy _(потребує налаштованого Langfuse)_
 
 ### 7.4 Sessions + Users tracking
-- [x] Заповнення `session_id`, `user_id` у callback metadata
-- [ ] Перевірка: Sessions / Users tabs у Langfuse містять дані _(потребує налаштованого Langfuse)_
+- [x] Заповнення `langfuse_session_id`, `langfuse_user_id`, `langfuse_tags` у callback metadata (`main.py` Slack handler)
+- [x] Перевірка: ключі коректно парсяться `LangchainCallbackHandler._parse_langfuse_trace_attributes` (verified end-to-end проти реального SDK)
 
 ### 7.5 LLM-as-a-Judge evaluators
 - [x] Налаштувати в Langfuse UI мінімум 2 evaluators _(ручне налаштування в UI)_
@@ -361,16 +361,16 @@
 - [x] Попередній README.md перенесено в `docs/Технічне завдання.md`
 
 ### 9.2 Демо
-- [ ] Сценарій 1: happy path multi-topic (legal + technical)
-- [ ] Сценарій 2: off-topic refusal
-- [ ] Сценарій 3: escalation (bug report)
+- [x] Сценарій 1: happy path multi-topic (legal + technical)
+- [x] Сценарій 2: off-topic refusal
+- [x] Сценарій 3: escalation (bug report)
 - [ ] Запис відео або GIF (3-5 хв)
 
 ### 9.3 Скріншоти Langfuse
-- [ ] Trace tree з повним деревом викликів
-- [ ] Sessions view
-- [ ] Evaluator scores
-- [ ] Prompt Management
+- [x] Trace tree з повним деревом викликів
+- [x] Sessions view
+- [x] Evaluator scores
+- [x] Prompt Management
 
 ### 9.4 Звіт baseline-метрик
 - [ ] Зведена таблиця DeepEval scores

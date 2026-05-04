@@ -5,7 +5,21 @@ from __future__ import annotations
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Send
+from langgraph.types import RetryPolicy, Send
+
+# Retry policy for all LLM-calling nodes.
+# OpenAI TPM rate-limit windows are 60 s; exhausting 200 k TPM means up to
+# ~60 s of backoff is needed. With initial_interval=2 + backoff_factor=2:
+#   attempt 2: ~2–3 s, attempt 3: ~4–7 s, attempt 4: ~8–15 s, attempt 5: ~16–30 s
+# Total wait before giving up: ~30–55 s, enough for the oldest requests to roll
+# out of the window. default_retry_on returns True for openai.RateLimitError.
+_LLM_RETRY = RetryPolicy(
+    initial_interval=2.0,
+    backoff_factor=2.0,
+    max_interval=30.0,
+    max_attempts=5,
+    jitter=True,
+)
 
 from agents.common_support import common_support_node
 from agents.critic import critic_node
@@ -138,13 +152,13 @@ def route_after_critic(state: GraphState) -> str:
 
 def build_graph(checkpointer: BaseCheckpointSaver | None = None):
     builder = StateGraph(GraphState)
-    builder.add_node("planner_node", planner_node)
+    builder.add_node("planner_node", planner_node, retry_policy=_LLM_RETRY)
     builder.add_node("fan_out_dispatcher", fan_out_dispatcher)
-    builder.add_node("lawyer_node", lawyer_node)
-    builder.add_node("common_support_node", common_support_node)
-    builder.add_node("technical_support_node", technical_support_node)
+    builder.add_node("lawyer_node", lawyer_node, retry_policy=_LLM_RETRY)
+    builder.add_node("common_support_node", common_support_node, retry_policy=_LLM_RETRY)
+    builder.add_node("technical_support_node", technical_support_node, retry_policy=_LLM_RETRY)
     builder.add_node("aggregate_responses_node", aggregate_responses_node)
-    builder.add_node("critic_node", critic_node)
+    builder.add_node("critic_node", critic_node, retry_policy=_LLM_RETRY)
     builder.add_node("targeted_redispatcher", targeted_redispatcher)
     builder.add_node("off_topic_node", off_topic_node)
     builder.add_node("escalation_node", escalation_node)
