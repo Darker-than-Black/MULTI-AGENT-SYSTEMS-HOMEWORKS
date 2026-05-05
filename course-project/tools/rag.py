@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 from config import settings
 from retrieval.retriever import hybrid_search
 
-_MAX_CONTEXT_CHARS = 6000
+_MAX_CONTEXT_CHARS = 10000
 
 
 def _format_chunks(chunks: list) -> str:

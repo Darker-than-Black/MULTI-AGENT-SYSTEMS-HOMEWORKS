@@ -117,12 +117,15 @@ def test_technical_support_applies_tag_whitelist_and_domain_whitelist(
     monkeypatch.setattr(
         settings, "tech_support_allowed_domains", ["prozorro.gov.ua", "me.gov.ua"]
     )
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
 
     build_technical_support_agent()
 
     rag_factory.assert_called_once_with(tag_whitelist=["tutorial", "kep"])
     web_factory.assert_called_once_with(["prozorro.gov.ua", "me.gov.ua"])
-    assert captured["tools"] == [rag_tool, web_tool]
+    assert captured["tools"][:2] == [rag_tool, web_tool]
+    assert captured["tools"][2].name == "confluence_search"
 
 
 def test_technical_support_falls_back_to_plain_web_search_when_no_domains(
@@ -151,6 +154,8 @@ def test_technical_support_falls_back_to_plain_web_search_when_no_domains(
     monkeypatch.setattr("agents.technical_support.get_llm", lambda: object())
     monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
     monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
 
     build_technical_support_agent()
 

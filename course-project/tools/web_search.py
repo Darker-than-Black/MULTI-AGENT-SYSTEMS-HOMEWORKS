@@ -38,12 +38,16 @@ def _is_ukrainian(text: str) -> bool:
         return False
 
 
-def _format_results(results: list[dict], max_snippet: int = 500) -> str:
+def _format_results(
+    results: list[dict],
+    max_snippet: int = 500,
+    require_ukrainian: bool = True,
+) -> str:
     formatted_blocks: list[str] = []
 
     for result in results:
         content = str(result.get("content") or "").strip()
-        if not _is_ukrainian(content):
+        if require_ukrainian and not _is_ukrainian(content):
             continue
 
         title = str(result.get("title") or "").strip()
@@ -83,7 +87,12 @@ def make_web_search_with_domains(allowed_domains: list[str]):
         інформація лише з затверджених доменів.
         """
         try:
-            return _format_results(_tavily_search(query, allowed_domains=locked_domains))
+            # Whitelisted domains are explicitly trusted; skip language filter so
+            # English technical docs (e.g. GitHub READMEs) are not silently dropped.
+            return _format_results(
+                _tavily_search(query, allowed_domains=locked_domains),
+                require_ukrainian=False,
+            )
         except Exception:
             return _SEARCH_FALLBACK
 

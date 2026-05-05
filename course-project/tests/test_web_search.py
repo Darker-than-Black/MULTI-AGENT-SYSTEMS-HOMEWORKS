@@ -130,6 +130,28 @@ def test_web_search_handles_tavily_exception(tavily_api_key_stub: None) -> None:
     assert result == _SEARCH_FALLBACK
 
 
+def test_web_search_technical_includes_non_ukrainian_from_whitelisted_domains(
+    tavily_api_key_stub: None,
+) -> None:
+    restricted_search = make_web_search_with_domains(["github.com/ProzorroUKR/prozorro-eds"])
+
+    with patch("tools.web_search.TavilyClient") as mock_tavily_client:
+        mock_tavily_client.return_value.search.return_value = {
+            "results": [
+                {
+                    "title": "prozorro-eds README",
+                    "url": "https://github.com/ProzorroUKR/prozorro-eds",
+                    "content": "Electronic Document Signing service for Prozorro. Handles KEP integration.",
+                }
+            ]
+        }
+
+        result = restricted_search.invoke({"query": "prozorro-eds функції"})
+
+    assert "prozorro-eds README" in result
+    assert result != _SEARCH_FALLBACK
+
+
 def test_web_search_snippet_truncation(tavily_api_key_stub: None) -> None:
     long_content = (
         "Це український текст про публічні закупівлі та тендерну документацію. " * 20

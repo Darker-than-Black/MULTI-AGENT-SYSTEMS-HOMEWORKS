@@ -9,6 +9,7 @@ from agents.technical_support import (
 )
 from config import settings
 from schemas import WorkerResponse
+from tools.confluence_search import confluence_search as _confluence_search_tool
 
 
 def test_invoke_technical_support_returns_worker_response(monkeypatch) -> None:
@@ -108,6 +109,8 @@ def test_technical_support_rag_tool_uses_tag_whitelist(monkeypatch) -> None:
         "tech_support_allowed_domains",
         ["prozorro.gov.ua", "infobox.prozorro.org"],
     )
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
 
     result = build_technical_support_agent()
 
@@ -120,7 +123,7 @@ def test_technical_support_rag_tool_uses_tag_whitelist(monkeypatch) -> None:
     )
     create_react_agent.assert_called_once_with(
         model=llm,
-        tools=[rag_tool, web_tool],
+        tools=[rag_tool, web_tool, _confluence_search_tool],
         prompt=create_react_agent.call_args.kwargs["prompt"],
         response_format=WorkerResponse,
     )
@@ -151,6 +154,8 @@ def test_technical_support_falls_back_to_plain_web_search_without_domains(
     monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
     monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
     monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
 
     result = build_technical_support_agent()
 
@@ -158,3 +163,54 @@ def test_technical_support_falls_back_to_plain_web_search_without_domains(
     make_rag_search_articles.assert_called_once_with(tag_whitelist=None)
     make_web_search_with_domains.assert_not_called()
     assert create_react_agent.call_args.kwargs["tools"][1].name == "web_search"
+
+
+def test_technical_support_includes_confluence_when_configured(monkeypatch) -> None:
+    rag_tool = object()
+    web_tool = object()
+    llm = object()
+    created_agent = SimpleNamespace(name="technical-support-agent")
+    make_rag_search_articles = Mock(return_value=rag_tool)
+    make_web_search_with_domains = Mock(return_value=web_tool)
+    create_react_agent = Mock(return_value=created_agent)
+
+    monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+    monkeypatch.setattr("agents.technical_support.make_web_search_with_domains", make_web_search_with_domains)
+    monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+    monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+    monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+    monkeypatch.setattr(settings, "tech_support_allowed_domains", ["prozorro.gov.ua"])
+    monkeypatch.setattr(settings, "confluence_url", "https://acme.atlassian.net/wiki")
+    monkeypatch.setattr(
+        settings,
+        "confluence_api_token",
+        SimpleNamespace(get_secret_value=lambda: "tok"),
+    )
+
+    build_technical_support_agent()
+
+    tools_arg = create_react_agent.call_args.kwargs["tools"]
+    assert len(tools_arg) == 3
+    assert tools_arg[2].name == "confluence_search"
+
+
+def test_technical_support_always_includes_confluence(monkeypatch) -> None:
+    rag_tool = object()
+    llm = object()
+    created_agent = SimpleNamespace(name="technical-support-agent")
+    make_rag_search_articles = Mock(return_value=rag_tool)
+    create_react_agent = Mock(return_value=created_agent)
+
+    monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+    monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+    monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+    monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+    monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
+
+    build_technical_support_agent()
+
+    tools_arg = create_react_agent.call_args.kwargs["tools"]
+    assert len(tools_arg) == 3
+    assert tools_arg[2].name == "confluence_search"

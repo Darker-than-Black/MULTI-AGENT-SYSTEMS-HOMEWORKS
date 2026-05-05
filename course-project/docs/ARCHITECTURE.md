@@ -481,6 +481,16 @@ list[SearchResult]
 | Technical Support | `settings.TECH_SUPPORT_ALLOWED_DOMAINS` |
 | Critic (опційно) | `None` |
 
+### 7.3 Technical Support — інструменти пошуку
+
+**Technical Support Agent** має три джерела знань (в порядку пріоритету):
+
+| Інструмент | Джерело | Умова активації |
+|---|---|---|
+| `confluence_search(query)` | Confluence Cloud CQL search | Тільки якщо `CONFLUENCE_URL` + `CONFLUENCE_API_TOKEN` задані; опційно обмежується просторами `CONFLUENCE_SPACE_KEYS` |
+| `rag_search_articles(query)` | Qdrant `articles` collection (гібридний пошук) | Завжди; pre-filter по `tags` ∈ `TECH_SUPPORT_TAG_WHITELIST` |
+| `web_search_technical(query)` | Tavily, обмежений доменами | Завжди; домени зі `TECH_SUPPORT_ALLOWED_DOMAINS` |
+
 ---
 
 ## 8. Sessions та память
@@ -803,3 +813,4 @@ services:
 | 9 | Static off-topic / escalation messages | LLM-генеровані | Передбачувана UX, без ризику галюцинацій на критичних шляхах |
 | 10 | Langfuse Prompt Mgmt | Захардкожені prompts | A/B тестування, версіонування, switching без redeploy |
 | 11 | Library-first development | Власна реалізація для контролю | Менше підтримки, кращий fit з ecosystem'ом, швидше до результату; стек обрано саме за повноту фіч |
+| 12 | Confluence Cloud як третє джерело знань для Technical Support | Інгестація сторінок Confluence у колекцію `articles` Qdrant | Live search зберігає актуальність без re-ingest; інгестація вимагала б окремого пайплайну синхронізації та ризикувала би застарілими даними. Інструмент env-gated — агент функціонує без Confluence credentials |
