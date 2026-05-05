@@ -8,9 +8,8 @@ so `Settings()` validates with an empty .env. Components that need a
 specific key (LLM, Tavily, Slack, Langfuse) will assert it themselves
 when first used in Phase 1+.
 """
-
+from __future__ import annotations
 from typing import Annotated, Literal
-
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -71,6 +70,14 @@ class Settings(BaseSettings):
     slack_user_channel_id: str | None = None
     slack_expert_channel_id: str | None = None
 
+    # ── Confluence ────────────────────────────────────────────────────
+    confluence_url: str | None = None
+    confluence_username: str | None = None
+    confluence_api_token: SecretStr | None = None
+    confluence_space_keys: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
+
     # ── Agent behavior ────────────────────────────────────────────────
     critic_max_retries: int = 3
     # After the first revision cycle, approve if avg of three Critic scores >= this.
@@ -87,6 +94,7 @@ class Settings(BaseSettings):
     @field_validator(
         "tech_support_allowed_domains",
         "tech_support_tag_whitelist",
+        "confluence_space_keys",
         mode="before",
     )
     @classmethod

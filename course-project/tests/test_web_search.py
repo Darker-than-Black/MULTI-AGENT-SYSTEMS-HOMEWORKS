@@ -100,6 +100,27 @@ def test_web_search_with_domains_passes_include_domains(
     ]
 
 
+def test_web_search_with_domains_strips_url_scheme(
+    tavily_api_key_stub: None,
+) -> None:
+    restricted_search = make_web_search_with_domains(
+        [
+            "https://prozorro-api-docs.readthedocs.io/en/master",
+            "https://github.com/ProzorroUKR/prozorro-pdf",
+        ]
+    )
+
+    with patch("tools.web_search.TavilyClient") as mock_tavily_client:
+        mock_tavily_client.return_value.search.return_value = {"results": []}
+
+        restricted_search.invoke({"query": "помилка API"})
+
+    assert mock_tavily_client.return_value.search.call_args.kwargs["include_domains"] == [
+        "prozorro-api-docs.readthedocs.io/en/master",
+        "github.com/ProzorroUKR/prozorro-pdf",
+    ]
+
+
 def test_web_search_handles_tavily_exception(tavily_api_key_stub: None) -> None:
     with patch("tools.web_search.TavilyClient") as mock_tavily_client:
         mock_tavily_client.return_value.search.side_effect = RuntimeError("tavily down")

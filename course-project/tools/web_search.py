@@ -73,7 +73,7 @@ def web_search(query: str) -> str:
 
 
 def make_web_search_with_domains(allowed_domains: list[str]):
-    locked_domains = list(allowed_domains)
+    locked_domains = [d.split("://", 1)[1] if "://" in d else d for d in allowed_domains]
 
     @tool("web_search_technical")
     def web_search_technical(query: str) -> str:
