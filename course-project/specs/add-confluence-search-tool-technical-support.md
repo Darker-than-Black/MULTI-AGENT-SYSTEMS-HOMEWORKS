@@ -1,5 +1,18 @@
 # Plan: Add Confluence Cloud Search Tool to Technical Support Agent
 
+## Current Status
+
+**Phase 1 (Foundation)** — COMPLETE (committed in `0a5b581 small fixes`):
+- `config.py`: 4 Confluence fields added, `_split_csv` validator extended
+- `requirements.txt`: `httpx>=0.27` added
+- `.env.example`: Confluence section added
+
+**Phase 2 (Core Tool)** — PENDING
+
+**Phase 3 (Integration)** — PENDING
+
+---
+
 ## Task Description
 
 Add a new `confluence_search` LangChain tool that queries a private Confluence Cloud instance via its REST API (CQL search). The tool is conditionally bound to the Technical Support agent — it appears in the agent's tool list only when `CONFLUENCE_URL` and `CONFLUENCE_API_TOKEN` are configured. This gives the agent access to private internal documentation alongside its existing RAG and restricted Tavily web search.
@@ -27,96 +40,61 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
 
 ## Relevant Files
 
-- `config.py` — add 4 new fields; extend `_split_csv` validator to cover `confluence_space_keys`
-- `.env.example` — add Confluence section with format documentation
-- `agents/technical_support.py` — conditional import + conditional tool append
+- `config.py` — ✅ DONE: 4 new fields added, `_split_csv` validator covers `confluence_space_keys`
+- `.env.example` — ✅ DONE: Confluence section added
+- `requirements.txt` — ✅ DONE: `httpx>=0.27` added
+- `agents/technical_support.py` — add top-level import + conditional tool append inside `build_technical_support_agent()`
 - `agents/lawyer.py` — read-only reference for `get_llm()` import pattern
-- `tools/web_search.py` — reference for `@tool`, fallback string, `try/except` error handling
+- `tools/web_search.py` — reference for `@tool`, fallback string, `try/except` error handling pattern
 - `tools/rag.py` — reference for `_format_*` helper and `_MAX_CONTEXT_CHARS` truncation
-- `tools/__init__.py` — empty, no changes needed
-- `tests/test_web_search.py` — reference for fixture + `patch("tools.module.httpx.get")` pattern
-- `tests/test_technical_support.py` — update builder tests that assert on `tools=[...]` list
-- `requirements.txt` — add `httpx>=0.27`
-- `docs/ARCHITECTURE.md` — add Confluence to Technical Support § 2.3 + ADR in § 15
-- `observability/langfuse_client.py` — read-only reference for `load_prompt` call used by agent
+- `tests/test_web_search.py` — reference for `patch("tools.module.httpx.get")` + `monkeypatch.setattr(module.settings, ...)` pattern
+- `tests/test_technical_support.py` — add 2 new conditional-binding tests; existing test at line 121 passes as-is when `confluence_url=None`
+- `docs/ARCHITECTURE.md` — add Confluence to Technical Support § 2.3 + ADR entry in § 15
+- `observability/langfuse_client.py` — read-only reference for `load_prompt` call
 
 ### New Files
 - `tools/confluence_search.py` — new `@tool` wrapping Confluence REST API
-- `tests/test_confluence_search.py` — unit tests with mocked `httpx.get`
+- `tests/test_confluence_search.py` — 7 unit tests with mocked `httpx.get`
 - `prompts/technical_support.md` — local backup of Langfuse prompt with new tool
 
 ## Implementation Phases
 
-- [ ] **Phase 1: Foundation** — Config + deps. No behavioural change, just infrastructure wiring.
-  - Status:
-  - Comments:
+- [x] **Phase 1: Foundation** — Config + deps. No behavioural change.
+  - Status: COMPLETE (committed in `0a5b581 small fixes`)
+  - Comments: config.py, requirements.txt, .env.example all updated
 
 - [ ] **Phase 2: Core Tool** — Implement `tools/confluence_search.py` with full error handling and tests.
-  - Status:
+  - Status: PENDING
   - Comments:
 
 - [ ] **Phase 3: Integration** — Wire tool into agent, update prompt backup, update architecture doc, run full test suite.
-  - Status:
+  - Status: PENDING
   - Comments:
 
 ## Step by Step Tasks
 
-### 1. Dependencies
+### 1. Dependencies (ALREADY DONE)
 
-- [ ] **Add `httpx` to `requirements.txt`** — append `httpx>=0.27` under the `# Web search` comment block (after `langdetect>=1.0.9`). Follow the existing lower-bound-only pattern with no upper bound.
-  ```
-  httpx>=0.27
-  ```
-  Then pin the exact installed version by running `pip show httpx | grep Version` and recording it in a comment (optional but recommended).
-  - Status:
-  - Comments:
+- [x] **`httpx>=0.27` in `requirements.txt`** — added with comment `# HTTP client (Confluence search; transitive dep of langchain-openai)`.
+  - Status: DONE
+  - Comments: Committed in 0a5b581
 
-- [ ] **Install the dependency** — run `pip install httpx>=0.27` in the project virtualenv so tests can import it.
-  - Status:
-  - Comments:
+- [x] **Confluence fields in `config.py`** — `confluence_url`, `confluence_username`, `confluence_api_token`, `confluence_space_keys` added after `# ── Slack ──` block.
+  - Status: DONE
+  - Comments: Committed in 0a5b581
 
-### 2. Configuration
+- [x] **`_split_csv` extended** — `"confluence_space_keys"` added to the `@field_validator` decorator.
+  - Status: DONE
+  - Comments: Committed in 0a5b581
 
-- [ ] **Add Confluence fields to `config.py`** — insert a new `# ── Confluence ──` section after the `# ── Slack ──` block (around line 73). Follow the exact comment style `# ── Name ──────────────────────────────────────────────────────`:
-  ```python
-  # ── Confluence ───────────────────────────────────────────────────────
-  confluence_url: str | None = None
-  confluence_username: str | None = None
-  confluence_api_token: SecretStr | None = None
-  confluence_space_keys: Annotated[list[str], NoDecode] = Field(
-      default_factory=list
-  )
-  ```
-  - Status:
-  - Comments:
+- [x] **`.env.example` updated** — Confluence section added after Slack block.
+  - Status: DONE
+  - Comments: Committed in 0a5b581
 
-- [ ] **Extend `_split_csv` field_validator** — add `"confluence_space_keys"` to the existing `@field_validator(...)` decorator so it is CSV-parsed the same way as `tech_support_allowed_domains`:
-  ```python
-  @field_validator(
-      "tech_support_allowed_domains",
-      "tech_support_tag_whitelist",
-      "confluence_space_keys",
-      mode="before",
-  )
-  ```
-  - Status:
-  - Comments:
+### 2. Tool Implementation
 
-- [ ] **Update `.env.example`** — add the Confluence section after the `# ── Slack ──` block:
-  ```
-  # ── Confluence ──────────────────────────────────────────────────────
-  CONFLUENCE_URL=https://your-org.atlassian.net/wiki
-  CONFLUENCE_USERNAME=your-email@example.com
-  CONFLUENCE_API_TOKEN=***
-  # CSV — parsed via field_validator into list[str]. Leave empty to search all spaces.
-  CONFLUENCE_SPACE_KEYS=TECH,PROC
-  ```
-  - Status:
-  - Comments:
+- [ ] **Create `tools/confluence_search.py`** — implement the full module:
 
-### 3. Tool Implementation
-
-- [ ] **Create `tools/confluence_search.py`** — implement the full module. Exact content:
   ```python
   """Confluence Cloud search tool for private technical documentation.
 
@@ -209,121 +187,17 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
   - Status:
   - Comments:
 
-### 4. Agent Integration
-
-- [ ] **Update `agents/technical_support.py`** — add conditional Confluence tool. The import and the conditional append go inside `build_technical_support_agent()` to avoid a top-level import that would fail when `httpx` is absent (edge case):
-  ```python
-  # At the top of the file, add:
-  from tools.confluence_search import confluence_search
-
-  # Inside build_technical_support_agent(), replace:
-  #   return create_react_agent(..., tools=[rag_tool, web_tool], ...)
-  # With:
-  tools = [rag_tool, web_tool]
-  if settings.confluence_url and settings.confluence_api_token:
-      tools.append(confluence_search)
-  return create_react_agent(
-      model=get_llm(),
-      tools=tools,
-      prompt=_load_system_prompt(),
-      response_format=WorkerResponse,
-  )
-  ```
-  The conditional ensures the LLM's tool schema is clean when Confluence is not configured.
-  - Status:
-  - Comments:
-
-### 5. Prompt Backup
-
-- [ ] **Create `prompts/` directory and `prompts/technical_support.md`** — create the backup file (the directory does not currently exist). Write the prompt content that matches what should be in Langfuse, adding the `confluence_search` tool to the "Available Tools" section. Template:
-  ```markdown
-  # Technical Support Agent
-
-  ## Role
-  You are the Technical Support Agent for the Prozorro electronic procurement system.
-  You help users with technical issues: Prozorro API integration, PDF generation,
-  platform errors, and internal configuration.
-
-  ## Tool Usage Order
-  1. `confluence_search` — search internal Confluence documentation FIRST (if available).
-  2. `rag_search_articles` — search the curated articles knowledge base.
-  3. `web_search_technical` — search approved external documentation sources.
-
-  ## Instructions
-  - Search at least two sources before composing your answer.
-  - Cite every source in the `sources` field of your response.
-  - If you find detailed documentation in Confluence, prefer it over web results.
-  - If no relevant information is found in any source, set `found=False` and
-    `needs_human=True` with a clear `needs_human_reason`.
-
-  ## Available Tools
-  - `confluence_search`: Search the internal Confluence knowledge base for technical
-    guides, API specs, and internal process documentation. Use BEFORE web_search_technical.
-  - `rag_search_articles`: Search the curated Prozorro articles knowledge base.
-  - `web_search_technical`: Search approved external technical documentation sources.
-
-  ## Response Format
-  Return a `WorkerResponse`:
-  - `topic`: always `"technical_system"`
-  - `found`: `true` if relevant information was found
-  - `answer`: detailed technical explanation (markdown)
-  - `sources`: list of Source objects (`{url, title}`) from all sources used
-  - `confidence`: 0.0–1.0
-  - `needs_human`: `true` only if this is a bug report or feature request
-  - `needs_human_reason`: reason for escalation if `needs_human` is `true`
-  ```
-  - Status:
-  - Comments:
-
-- [ ] **Update Langfuse prompt `procurement-technical-support`** — **manual step** (cannot be automated). Log in to your Langfuse dashboard, open the `procurement-technical-support` prompt, and add the `confluence_search` tool description and updated "Tool Usage Order" matching the content of `prompts/technical_support.md`. Publish with label `production`.
-  - Status:
-  - Comments:
-
-### 6. Architecture Documentation
-
-- [ ] **Update `docs/ARCHITECTURE.md` § 2.3 (Technical Support)** — add Confluence as a third tool source. Find the "Technical Support" agent section and extend the tools description:
-  ```
-  **Tools:**
-  - `confluence_search(query)` — Confluence Cloud CQL search, optional, bound only when
-    `CONFLUENCE_URL` + `CONFLUENCE_API_TOKEN` are set; restricted to `CONFLUENCE_SPACE_KEYS`
-    if configured
-  - `rag_search_articles(query)` — hybrid RAG search over `articles` collection, pre-filtered
-    by `tags` matching `TECH_SUPPORT_TAG_WHITELIST`
-  - `web_search_technical(query)` — Tavily search restricted to `TECH_SUPPORT_ALLOWED_DOMAINS`
-  ```
-  - Status:
-  - Comments:
-
-- [ ] **Add ADR entry to `docs/ARCHITECTURE.md` § 15** — record the architectural decision:
-  ```
-  | ADR-N | Confluence Cloud as third knowledge source for Technical Support |
-  | Date  | 2026-05-05 |
-  | Decision | Add optional live Confluence search tool to Technical Support agent.
-               Rationale: internal process documentation lives in Confluence and is not
-               public-web-searchable. Tool is conditionally bound (env-gated) so the
-               agent remains functional with or without Confluence credentials. |
-  | Alternatives considered | Ingest Confluence pages into the `articles` Qdrant collection.
-                               Rejected: stale data risk (Confluence updates don't trigger
-                               re-ingestion), duplicate storage cost, freshness maintenance burden. |
-  ```
-  - Status:
-  - Comments:
-
-### 7. Tests
-
-- [ ] **Create `tests/test_confluence_search.py`** — implement the following 7 tests using the same patterns as `tests/test_web_search.py` (monkeypatch on `settings` object, `patch("tools.confluence_search.httpx.get")`):
+- [ ] **Create `tests/test_confluence_search.py`** — 7 unit tests following `tests/test_web_search.py` pattern (monkeypatch on `confluence_module.settings`, `patch("tools.confluence_search.httpx.get")`):
 
   ```python
   from types import SimpleNamespace
-  from unittest.mock import patch, Mock
+  from unittest.mock import patch
 
   import pytest
 
   import tools.confluence_search as confluence_module
   from tools.confluence_search import (
       _FALLBACK,
-      _format_results,
-      _search_confluence,
       _strip_html,
       confluence_search,
   )
@@ -406,38 +280,188 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
 
 
   def test_strip_html_removes_all_tags() -> None:
-      assert _strip_html("<h1>Title</h1><p>Body</p>") == "Title  Body"
+      assert "Title" in _strip_html("<h1>Title</h1><p>Body</p>")
+      assert "Body" in _strip_html("<h1>Title</h1><p>Body</p>")
+      assert "<" not in _strip_html("<h1>Title</h1><p>Body</p>")
       assert _strip_html("No tags") == "No tags"
       assert _strip_html("") == ""
   ```
   - Status:
   - Comments:
 
-- [ ] **Update `tests/test_technical_support.py`** — update builder tests that assert on `tools=[rag_tool, web_tool]` to account for the conditional Confluence tool:
-  - Find tests that call `create_react_agent.assert_called_once_with(... tools=[rag_tool, web_tool] ...)` and update them to work with the new conditional logic. Specifically:
-    - When `settings.confluence_url = None` (or not set): tools list stays `[rag_tool, web_tool]`
-    - When `settings.confluence_url` and `settings.confluence_api_token` are set: tools list is `[rag_tool, web_tool, confluence_search_tool]`
-  - Add two new tests:
-    ```python
-    def test_technical_support_includes_confluence_when_configured(monkeypatch):
-        """When Confluence credentials are present, confluence_search is included."""
-        monkeypatch.setattr(settings, "confluence_url", "https://acme.atlassian.net/wiki")
-        monkeypatch.setattr(settings, "confluence_api_token", SimpleNamespace(get_secret_value=lambda: "tok"))
-        # ... mock create_react_agent, make_rag_search_articles, etc. ...
-        # Assert tools list has 3 items, last is confluence_search
+### 3. Agent Integration
 
-    def test_technical_support_excludes_confluence_when_not_configured(monkeypatch):
-        """When Confluence credentials are absent, confluence_search is NOT included."""
-        monkeypatch.setattr(settings, "confluence_url", None)
-        # ... mock create_react_agent ...
-        # Assert tools list has 2 items: [rag_tool, web_tool]
-    ```
+- [ ] **Update `agents/technical_support.py`** — add top-level import and conditional tool binding.
+
+  Add import at the top of the file (after existing imports):
+  ```python
+  from tools.confluence_search import confluence_search
+  ```
+
+  Replace the `return create_react_agent(...)` call inside `build_technical_support_agent()`:
+  ```python
+  # Before (current code):
+  return create_react_agent(
+      model=get_llm(),
+      tools=[rag_tool, web_tool],
+      prompt=_load_system_prompt(),
+      response_format=WorkerResponse,
+  )
+
+  # After:
+  tools = [rag_tool, web_tool]
+  if settings.confluence_url and settings.confluence_api_token:
+      tools.append(confluence_search)
+  return create_react_agent(
+      model=get_llm(),
+      tools=tools,
+      prompt=_load_system_prompt(),
+      response_format=WorkerResponse,
+  )
+  ```
+
+  **Note on existing tests**: The test `test_technical_support_rag_tool_uses_tag_whitelist` (line 121 in `test_technical_support.py`) asserts `tools=[rag_tool, web_tool]`. Since `settings.confluence_url` defaults to `None`, the conditional is `False` and the tools list remains 2 items — this test passes WITHOUT changes.
   - Status:
   - Comments:
 
-### 8. Validation
+- [ ] **Update `tests/test_technical_support.py`** — add 2 new tests for the conditional Confluence binding. Append after the last existing test:
 
-- [ ] **Run syntax check** — verify no import errors:
+  ```python
+  def test_technical_support_includes_confluence_when_configured(monkeypatch) -> None:
+      rag_tool = object()
+      web_tool = object()
+      llm = object()
+      created_agent = SimpleNamespace(name="technical-support-agent")
+      make_rag_search_articles = Mock(return_value=rag_tool)
+      make_web_search_with_domains = Mock(return_value=web_tool)
+      create_react_agent = Mock(return_value=created_agent)
+
+      monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+      monkeypatch.setattr("agents.technical_support.make_web_search_with_domains", make_web_search_with_domains)
+      monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+      monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+      monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+      monkeypatch.setattr(settings, "tech_support_allowed_domains", ["prozorro.gov.ua"])
+      monkeypatch.setattr(settings, "confluence_url", "https://acme.atlassian.net/wiki")
+      monkeypatch.setattr(
+          settings,
+          "confluence_api_token",
+          SimpleNamespace(get_secret_value=lambda: "tok"),
+      )
+
+      build_technical_support_agent()
+
+      tools_arg = create_react_agent.call_args.kwargs["tools"]
+      assert len(tools_arg) == 3
+      assert tools_arg[2].name == "confluence_search"
+
+
+  def test_technical_support_excludes_confluence_when_not_configured(monkeypatch) -> None:
+      rag_tool = object()
+      llm = object()
+      created_agent = SimpleNamespace(name="technical-support-agent")
+      make_rag_search_articles = Mock(return_value=rag_tool)
+      create_react_agent = Mock(return_value=created_agent)
+
+      monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+      monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+      monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+      monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+      monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+      monkeypatch.setattr(settings, "confluence_url", None)
+      monkeypatch.setattr(settings, "confluence_api_token", None)
+
+      build_technical_support_agent()
+
+      tools_arg = create_react_agent.call_args.kwargs["tools"]
+      assert len(tools_arg) == 2
+      assert all(getattr(t, "name", None) != "confluence_search" for t in tools_arg)
+  ```
+
+  Also add `SimpleNamespace` to existing import at line 1 — it's already there (`from types import SimpleNamespace`). No import changes needed.
+  - Status:
+  - Comments:
+
+### 4. Prompt Backup
+
+- [ ] **Create `prompts/` directory and `prompts/technical_support.md`**:
+
+  ```markdown
+  # Technical Support Agent
+
+  ## Role
+  You are the Technical Support Agent for the Prozorro electronic procurement system.
+  You help users with technical issues: Prozorro API integration, PDF generation,
+  platform errors, and internal configuration.
+
+  ## Tool Usage Order
+  1. `confluence_search` — search internal Confluence documentation FIRST (if available).
+  2. `rag_search_articles` — search the curated articles knowledge base.
+  3. `web_search_technical` — search approved external documentation sources.
+
+  ## Instructions
+  - Search at least two sources before composing your answer.
+  - Cite every source in the `sources` field of your response.
+  - If you find detailed documentation in Confluence, prefer it over web results.
+  - If no relevant information is found in any source, set `found=False` and
+    `needs_human=True` with a clear `needs_human_reason`.
+
+  ## Available Tools
+  - `confluence_search`: Search the internal Confluence knowledge base for technical
+    guides, API specs, and internal process documentation. Use BEFORE web_search_technical.
+  - `rag_search_articles`: Search the curated Prozorro articles knowledge base.
+  - `web_search_technical`: Search approved external technical documentation sources.
+
+  ## Response Format
+  Return a `WorkerResponse`:
+  - `topic`: always `"technical_system"`
+  - `found`: `true` if relevant information was found
+  - `answer`: detailed technical explanation (markdown)
+  - `sources`: list of Source objects (`{url, title}`) from all sources used
+  - `confidence`: 0.0–1.0
+  - `needs_human`: `true` only if this is a bug report or feature request
+  - `needs_human_reason`: reason for escalation if `needs_human` is `true`
+  ```
+  - Status:
+  - Comments:
+
+- [ ] **Update Langfuse prompt `procurement-technical-support`** — **MANUAL STEP**. Log in to Langfuse dashboard, open `procurement-technical-support`, add `confluence_search` tool description and updated "Tool Usage Order" matching `prompts/technical_support.md`. Publish with label `production`.
+  - Status:
+  - Comments:
+
+### 5. Architecture Documentation
+
+- [ ] **Update `docs/ARCHITECTURE.md` § 2.3 (Technical Support)** — add Confluence as third tool source. Find the "Technical Support" agent section and extend the tools list:
+  ```
+  **Tools:**
+  - `confluence_search(query)` — Confluence Cloud CQL search, optional, bound only when
+    `CONFLUENCE_URL` + `CONFLUENCE_API_TOKEN` are set; restricted to `CONFLUENCE_SPACE_KEYS`
+    if configured
+  - `rag_search_articles(query)` — hybrid RAG search over `articles` collection, pre-filtered
+    by `tags` matching `TECH_SUPPORT_TAG_WHITELIST`
+  - `web_search_technical(query)` — Tavily search restricted to `TECH_SUPPORT_ALLOWED_DOMAINS`
+  ```
+  - Status:
+  - Comments:
+
+- [ ] **Add ADR entry to `docs/ARCHITECTURE.md` § 15** — find the highest existing ADR number and increment by 1:
+  ```
+  | ADR-N | Confluence Cloud as third knowledge source for Technical Support |
+  | Date  | 2026-05-05 |
+  | Decision | Add optional live Confluence search tool to Technical Support agent.
+               Rationale: internal process documentation lives in Confluence and is not
+               public-web-searchable. Tool is conditionally bound (env-gated) so the
+               agent remains functional with or without Confluence credentials. |
+  | Alternatives considered | Ingest Confluence pages into the `articles` Qdrant collection.
+                               Rejected: stale data risk (Confluence updates don't trigger
+                               re-ingestion), duplicate storage cost, freshness maintenance burden. |
+  ```
+  - Status:
+  - Comments:
+
+### 6. Validation
+
+- [ ] **Run syntax check**:
   ```bash
   python -m py_compile tools/confluence_search.py agents/technical_support.py config.py
   ```
@@ -456,7 +480,7 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
   ```bash
   pytest tests/test_technical_support.py -v
   ```
-  All existing tests + 2 new ones must pass.
+  All existing tests + 2 new ones must pass (7 total).
   - Status:
   - Comments:
 
@@ -464,7 +488,7 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
   ```bash
   pytest tests/ -q --ignore=tests/evaluations
   ```
-  Must be 190+ passed, 0 failed.
+  Must exit 0 with 0 failures.
   - Status:
   - Comments:
 
@@ -477,20 +501,20 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
 
 ## Testing Strategy
 
-**Unit tests** (`tests/test_confluence_search.py`): 7 tests covering happy path, empty results, HTTP errors, CQL space-key filter (present and absent), HTML stripping, and the `_strip_html` helper directly. All external HTTP calls are mocked via `patch("tools.confluence_search.httpx.get")`. Settings are monkeypatched directly on the `settings` object following the established fixture pattern.
+**Unit tests** (`tests/test_confluence_search.py`): 7 tests covering happy path, empty results, HTTP 4xx errors, CQL space-key filter present and absent, HTML stripping (inline), and `_strip_html` helper directly. All HTTP calls mocked via `patch("tools.confluence_search.httpx.get")`. Settings monkeypatched on `confluence_module.settings` following the `test_web_search.py` pattern.
 
-**Agent wiring tests** (`tests/test_technical_support.py`): 2 new tests verify that the tool list is `[rag_tool, web_tool, confluence_search]` when credentials are configured, and `[rag_tool, web_tool]` when they are not. Existing builder tests are updated to match the new conditional logic.
+**Agent wiring tests** (`tests/test_technical_support.py`): 2 new tests verify the tool list is `[rag_tool, web_tool, confluence_search]` when credentials are configured and `[rag_tool, web_tool]` when they are absent. Existing tests are unaffected — the conditional is `False` when `settings.confluence_url=None` (the default), so the assertions at line 121 (`tools=[rag_tool, web_tool]`) continue to hold.
 
-**No LLM evaluation tests** are added at this stage — the Confluence tool is an input to the agent's existing ReAct loop; its quality depends on the Confluence content itself, which is user-managed. Add an eval case to `tests/evaluations/` only after staging content in Confluence.
+**No LLM evaluation tests** at this stage — the tool is an HTTP wrapper; its quality depends on Confluence content, which is user-managed.
 
 ## Acceptance Criteria
 
 1. `pytest tests/test_confluence_search.py -v` passes all 7 tests.
-2. `pytest tests/test_technical_support.py -v` passes all tests including the 2 new conditional-binding tests.
-3. `pytest tests/ -q --ignore=tests/evaluations` exits 0 with ≥190 passed and 0 failures.
+2. `pytest tests/test_technical_support.py -v` passes all tests including the 2 new conditional-binding tests (7 total).
+3. `pytest tests/ -q --ignore=tests/evaluations` exits 0 with 0 failures.
 4. `python -m py_compile tools/confluence_search.py agents/technical_support.py config.py` exits 0.
-5. When `CONFLUENCE_URL`, `CONFLUENCE_USERNAME`, `CONFLUENCE_API_TOKEN` are set in `.env`, the graph starts and `build_technical_support_agent()` returns an agent with 3 tools.
-6. When the Confluence env vars are absent, the graph starts and the agent has 2 tools (no regression).
+5. When `CONFLUENCE_URL`, `CONFLUENCE_USERNAME`, `CONFLUENCE_API_TOKEN` are set in `.env`, `build_technical_support_agent()` returns an agent with 3 tools.
+6. When Confluence env vars are absent, agent has 2 tools (no regression).
 7. `docs/ARCHITECTURE.md` mentions `confluence_search` in the Technical Support section and has an ADR entry.
 8. `prompts/technical_support.md` exists and mentions all 3 tools.
 9. Langfuse prompt `procurement-technical-support` is updated (manual verification).
@@ -498,9 +522,6 @@ Add a thin `@tool`-decorated wrapper (`tools/confluence_search.py`) that calls t
 ## Validation Commands
 
 ```bash
-# Install new dep
-pip install httpx>=0.27
-
 # Syntax check
 python -m py_compile tools/confluence_search.py agents/technical_support.py config.py
 
@@ -515,22 +536,15 @@ pytest tests/ -q --ignore=tests/evaluations
 
 # Graph sanity
 python -c "from supervisor import build_graph; print('graph ok')"
-
-# Verify tool count when Confluence is configured (requires real or stubbed .env)
-python -c "
-from agents.technical_support import build_technical_support_agent
-from config import settings
-settings.confluence_url = 'https://test.atlassian.net/wiki'
-# confluence_api_token can't be set directly but this checks the conditional branch exists
-print('conditional logic present in source')
-"
 ```
 
 ## Notes
 
-- **`httpx` is a transitive dep** of `langchain-openai` (via `openai>=1.x`), so it is already installed in any environment running this project. Adding it to `requirements.txt` makes the dependency explicit and pinned, matching the project's convention.
-- **HTML stripping via `re.sub`** is intentionally simple — Confluence body content is structured HTML with `<p>`, `<h1>`, `<ul>`, `<li>` tags; simple tag removal is sufficient for excerpt generation. If richer parsing is ever needed, `beautifulsoup4` can be added at that point.
-- **The Langfuse update is a manual step** — the codebase has no Langfuse Management API client. If a local fallback is needed during development (when Langfuse is not configured), `observability/langfuse_client.py` raises `RuntimeError`; in that case temporarily hardcode the prompt string in `_load_system_prompt()` during local testing and revert before merging.
-- **Confluence space keys format**: the CQL `IN (KEY1,KEY2)` syntax expects unquoted keys. If a space key contains special characters, it would need quoting — for standard Confluence space keys (uppercase alphanumeric) this is not an issue.
-- **Rate limits**: Confluence Cloud REST API rate limits depend on the plan (typically 300–600 req/min). With `max_results=5` and tool calls triggered only on user queries, staying within limits is not a concern at this scale.
-- **`docs/ARCHITECTURE.md` § 15 ADR numbering**: find the highest existing ADR number and increment by 1.
+- **`httpx` is a transitive dep** of `langchain-openai` (via `openai>=1.x`) and is already installed. Adding it to `requirements.txt` makes the dependency explicit, matching project convention.
+- **HTML stripping via `re.sub`** is intentionally simple — Confluence body content uses standard HTML tags (`<p>`, `<h1>`, `<ul>`, `<li>`); regex tag removal is sufficient for excerpt generation. If richer parsing is needed later, `beautifulsoup4` can be added.
+- **Top-level import** of `confluence_search` in `agents/technical_support.py` is safe because `httpx` is always installed. The conditional inside `build_technical_support_agent()` controls whether the LLM sees the tool — the module always imports cleanly.
+- **Singleton cache**: `_technical_support` is built once per process. Confluence credentials must be present at agent startup to activate the tool; runtime credential changes are not reflected until process restart.
+- **The Langfuse update is a manual step** — the codebase has no Langfuse Management API client.
+- **Confluence space keys format**: CQL `IN (KEY1,KEY2)` expects unquoted keys. Standard Confluence space keys (uppercase alphanumeric) require no quoting.
+- **Rate limits**: Confluence Cloud REST API typically allows 300–600 req/min. With `max_results=5` and tool calls triggered only on user queries, staying within limits is not a concern at this scale.
+- **`docs/ARCHITECTURE.md` § 15 ADR numbering**: read the file to find the highest existing ADR number and increment by 1.
