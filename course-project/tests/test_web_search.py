@@ -105,8 +105,8 @@ def test_web_search_with_domains_strips_url_scheme(
 ) -> None:
     restricted_search = make_web_search_with_domains(
         [
-            "https://prozorro-api-docs.readthedocs.io/en/master",
-            "https://github.com/ProzorroUKR/prozorro-pdf",
+            "https://prozorro-api-docs.readthedocs.io",
+            "https://github.com",
         ]
     )
 
@@ -116,8 +116,8 @@ def test_web_search_with_domains_strips_url_scheme(
         restricted_search.invoke({"query": "помилка API"})
 
     assert mock_tavily_client.return_value.search.call_args.kwargs["include_domains"] == [
-        "prozorro-api-docs.readthedocs.io/en/master",
-        "github.com/ProzorroUKR/prozorro-pdf",
+        "prozorro-api-docs.readthedocs.io",
+        "github.com",
     ]
 
 
@@ -133,7 +133,7 @@ def test_web_search_handles_tavily_exception(tavily_api_key_stub: None) -> None:
 def test_web_search_technical_includes_non_ukrainian_from_whitelisted_domains(
     tavily_api_key_stub: None,
 ) -> None:
-    restricted_search = make_web_search_with_domains(["github.com/ProzorroUKR/prozorro-eds"])
+    restricted_search = make_web_search_with_domains(["github.com"])
 
     with patch("tools.web_search.TavilyClient") as mock_tavily_client:
         mock_tavily_client.return_value.search.return_value = {

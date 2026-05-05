@@ -483,13 +483,14 @@ list[SearchResult]
 
 ### 7.3 Technical Support — інструменти пошуку
 
-**Technical Support Agent** має три джерела знань (в порядку пріоритету):
+**Technical Support Agent** має чотири джерела знань (в порядку пріоритету):
 
 | Інструмент | Джерело | Умова активації |
 |---|---|---|
-| `confluence_search(query)` | Confluence Cloud CQL search | Тільки якщо `CONFLUENCE_URL` + `CONFLUENCE_API_TOKEN` задані; опційно обмежується просторами `CONFLUENCE_SPACE_KEYS` |
+| `confluence_search(query)` | Confluence Cloud CQL search | Завжди прив'язаний; перевіряє `CONFLUENCE_URL` + `CONFLUENCE_API_TOKEN` при першому виклику; опційно обмежується просторами `CONFLUENCE_SPACE_KEYS` |
 | `rag_search_articles(query)` | Qdrant `articles` collection (гібридний пошук) | Завжди; pre-filter по `tags` ∈ `TECH_SUPPORT_TAG_WHITELIST` |
-| `web_search_technical(query)` | Tavily, обмежений доменами | Завжди; домени зі `TECH_SUPPORT_ALLOWED_DOMAINS` |
+| `github_repo_search(query)` | GitHub REST Search API, code search | Тільки якщо `TECH_SUPPORT_GITHUB_REPOS` не порожній; обмежений `repo:owner/name` кваліфікаторами; опційно автентифікований через `GITHUB_API_TOKEN` |
+| `web_search_technical(query)` | Tavily, обмежений хостами | Завжди; хости зі `TECH_SUPPORT_ALLOWED_DOMAINS` (лише bare hostnames — без схем і шляхів) |
 
 ---
 
@@ -641,9 +642,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     embedding_model: str = "text-embedding-3-small"
 
-    # Web search
+    # GitHub search (optional; bound to Technical Support when non-empty)
+    github_api_token: str | None = None
+    tech_support_github_repos: list[str] = []  # CSV-parsed; owner/repo strings
+
+    # Web search (Tavily)
     tavily_api_key: str
-    tech_support_allowed_domains: list[str] = []  # CSV-parsed
+    tech_support_allowed_domains: list[str] = []  # CSV-parsed; bare hostnames only
     tech_support_tag_whitelist: list[str] = []
 
     # Qdrant
@@ -814,3 +819,4 @@ services:
 | 10 | Langfuse Prompt Mgmt | Захардкожені prompts | A/B тестування, версіонування, switching без redeploy |
 | 11 | Library-first development | Власна реалізація для контролю | Менше підтримки, кращий fit з ecosystem'ом, швидше до результату; стек обрано саме за повноту фіч |
 | 12 | Confluence Cloud як третє джерело знань для Technical Support | Інгестація сторінок Confluence у колекцію `articles` Qdrant | Live search зберігає актуальність без re-ingest; інгестація вимагала б окремого пайплайну синхронізації та ризикувала би застарілими даними. Інструмент env-gated — агент функціонує без Confluence credentials |
+| 13 | GitHub Search API як окремий інструмент `github_repo_search` для репозиторіїв | Tavily `include_domains` з repo-path рядками | Tavily domain filtering — хост-рівень, не repo-рівень; GitHub Code Search API надає точний пошук по коду й документації у визначеному списку репозиторіїв. `TECH_SUPPORT_ALLOWED_DOMAINS` — лише bare hostnames для Tavily. Інструмент env-gated через `TECH_SUPPORT_GITHUB_REPOS` — агент функціонує без GitHub credentials |

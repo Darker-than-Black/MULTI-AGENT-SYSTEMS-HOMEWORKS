@@ -9,6 +9,7 @@ from agents.lawyer import get_llm
 from config import settings
 from schemas import WorkerResponse
 from tools.confluence_search import confluence_search
+from tools.github_repo_search import github_repo_search
 from tools.rag import make_rag_search_articles
 from tools.web_search import make_web_search_with_domains, web_search
 from observability.langfuse_client import load_prompt
@@ -29,7 +30,7 @@ def build_technical_support_agent():  # type: ignore[return]
     )
     return create_react_agent(
         model=get_llm(),
-        tools=[rag_tool, web_tool, confluence_search],
+        tools=[rag_tool, web_tool, confluence_search, github_repo_search],
         prompt=_load_system_prompt(),
         response_format=WorkerResponse,
     )

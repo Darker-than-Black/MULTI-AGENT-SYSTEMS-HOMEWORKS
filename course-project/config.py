@@ -28,10 +28,19 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     embedding_model: str = "text-embedding-3-small"
 
+    # ── GitHub search ─────────────────────────────────────────────────
+    github_api_token: SecretStr | None = None
+    # owner/repo strings; full GitHub URLs are normalized by _normalize_github_repos
+    tech_support_github_repos: Annotated[list[str], NoDecode] = Field(
+        default_factory=list
+    )
+
     # ── Web search (Tavily) ───────────────────────────────────────────
     tavily_api_key: SecretStr | None = None
     # NoDecode disables pydantic-settings' JSON-decode of list-typed env
     # values, so the CSV validator below receives the raw string.
+    # Host-only values are canonical (e.g. "docs.prozorro.org"); full URLs
+    # are normalized to bare hosts by _normalize_allowed_domains.
     tech_support_allowed_domains: Annotated[list[str], NoDecode] = Field(
         default_factory=list
     )
@@ -95,6 +104,7 @@ class Settings(BaseSettings):
         "tech_support_allowed_domains",
         "tech_support_tag_whitelist",
         "confluence_space_keys",
+        "tech_support_github_repos",
         mode="before",
     )
     @classmethod
@@ -102,6 +112,30 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("tech_support_allowed_domains", mode="after")
+    @classmethod
+    def _normalize_allowed_domains(cls, v: list[str]) -> list[str]:
+        result = []
+        for domain in v:
+            if "://" in domain:
+                domain = domain.split("://", 1)[1]
+            domain = domain.split("/")[0].strip()
+            if domain:
+                result.append(domain)
+        return result
+
+    @field_validator("tech_support_github_repos", mode="after")
+    @classmethod
+    def _normalize_github_repos(cls, v: list[str]) -> list[str]:
+        result = []
+        for repo in v:
+            if "github.com/" in repo:
+                repo = repo.split("github.com/", 1)[1].rstrip("/")
+            repo = repo.strip()
+            if repo:
+                result.append(repo)
+        return result
 
 
 settings = Settings()

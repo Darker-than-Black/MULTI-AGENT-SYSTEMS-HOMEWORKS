@@ -10,6 +10,7 @@ from agents.technical_support import (
 from config import settings
 from schemas import WorkerResponse
 from tools.confluence_search import confluence_search as _confluence_search_tool
+from tools.github_repo_search import github_repo_search as _github_repo_search_tool
 
 
 def test_invoke_technical_support_returns_worker_response(monkeypatch) -> None:
@@ -111,6 +112,7 @@ def test_technical_support_rag_tool_uses_tag_whitelist(monkeypatch) -> None:
     )
     monkeypatch.setattr(settings, "confluence_url", None)
     monkeypatch.setattr(settings, "confluence_api_token", None)
+    monkeypatch.setattr(settings, "tech_support_github_repos", [])
 
     result = build_technical_support_agent()
 
@@ -123,7 +125,7 @@ def test_technical_support_rag_tool_uses_tag_whitelist(monkeypatch) -> None:
     )
     create_react_agent.assert_called_once_with(
         model=llm,
-        tools=[rag_tool, web_tool, _confluence_search_tool],
+        tools=[rag_tool, web_tool, _confluence_search_tool, _github_repo_search_tool],
         prompt=create_react_agent.call_args.kwargs["prompt"],
         response_format=WorkerResponse,
     )
@@ -156,6 +158,7 @@ def test_technical_support_falls_back_to_plain_web_search_without_domains(
     monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
     monkeypatch.setattr(settings, "confluence_url", None)
     monkeypatch.setattr(settings, "confluence_api_token", None)
+    monkeypatch.setattr(settings, "tech_support_github_repos", [])
 
     result = build_technical_support_agent()
 
@@ -186,15 +189,16 @@ def test_technical_support_includes_confluence_when_configured(monkeypatch) -> N
         "confluence_api_token",
         SimpleNamespace(get_secret_value=lambda: "tok"),
     )
+    monkeypatch.setattr(settings, "tech_support_github_repos", [])
 
     build_technical_support_agent()
 
     tools_arg = create_react_agent.call_args.kwargs["tools"]
-    assert len(tools_arg) == 3
+    assert len(tools_arg) == 4
     assert tools_arg[2].name == "confluence_search"
 
 
-def test_technical_support_always_includes_confluence(monkeypatch) -> None:
+def test_technical_support_always_includes_confluence_and_github(monkeypatch) -> None:
     rag_tool = object()
     llm = object()
     created_agent = SimpleNamespace(name="technical-support-agent")
@@ -208,9 +212,62 @@ def test_technical_support_always_includes_confluence(monkeypatch) -> None:
     monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
     monkeypatch.setattr(settings, "confluence_url", None)
     monkeypatch.setattr(settings, "confluence_api_token", None)
+    monkeypatch.setattr(settings, "tech_support_github_repos", [])
 
     build_technical_support_agent()
 
     tools_arg = create_react_agent.call_args.kwargs["tools"]
-    assert len(tools_arg) == 3
+    assert len(tools_arg) == 4
     assert tools_arg[2].name == "confluence_search"
+    assert tools_arg[3] is _github_repo_search_tool
+
+
+def test_technical_support_binds_github_repo_search_when_repos_configured(
+    monkeypatch,
+) -> None:
+    rag_tool = object()
+    llm = object()
+    created_agent = SimpleNamespace(name="technical-support-agent")
+    make_rag_search_articles = Mock(return_value=rag_tool)
+    create_react_agent = Mock(return_value=created_agent)
+
+    monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+    monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+    monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+    monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+    monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
+    monkeypatch.setattr(settings, "tech_support_github_repos", ["ProzorroUKR/prozorro-eds"])
+
+    build_technical_support_agent()
+
+    tools_arg = create_react_agent.call_args.kwargs["tools"]
+    assert len(tools_arg) == 4
+    assert tools_arg[3] is _github_repo_search_tool
+
+
+def test_technical_support_github_repo_search_always_bound(
+    monkeypatch,
+) -> None:
+    """github_repo_search is always in the tool list; graceful degradation is
+    handled by the tool itself returning a fallback when repos are unconfigured."""
+    rag_tool = object()
+    llm = object()
+    created_agent = SimpleNamespace(name="technical-support-agent")
+    make_rag_search_articles = Mock(return_value=rag_tool)
+    create_react_agent = Mock(return_value=created_agent)
+
+    monkeypatch.setattr("agents.technical_support.make_rag_search_articles", make_rag_search_articles)
+    monkeypatch.setattr("agents.technical_support.create_react_agent", create_react_agent)
+    monkeypatch.setattr("agents.technical_support.get_llm", lambda: llm)
+    monkeypatch.setattr(settings, "tech_support_tag_whitelist", [])
+    monkeypatch.setattr(settings, "tech_support_allowed_domains", [])
+    monkeypatch.setattr(settings, "confluence_url", None)
+    monkeypatch.setattr(settings, "confluence_api_token", None)
+    monkeypatch.setattr(settings, "tech_support_github_repos", [])
+
+    build_technical_support_agent()
+
+    tools_arg = create_react_agent.call_args.kwargs["tools"]
+    assert _github_repo_search_tool in tools_arg

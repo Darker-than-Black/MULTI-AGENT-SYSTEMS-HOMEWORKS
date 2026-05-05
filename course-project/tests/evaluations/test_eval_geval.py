@@ -344,52 +344,45 @@ def test_lawyer_tool_correctness():
 
 @pytest.mark.eval
 def test_technical_support_tool_correctness():
-    """Technical Support uses rag_search (articles) then web_search with allowed_domains."""
+    """Technical Support uses rag_search_articles, github_repo_search for library queries."""
     tool_correctness = ToolCorrectnessMetric(
         threshold=0.7,
         model="gpt-4o-mini",
     )
     tools_called = [
         ToolCall(
-            name="rag_search",
-            input_parameters={
-                "query": "помилка КЕП подання пропозиції майданчик ЕСЗ",
-                "collection": "articles",
-            },
-            output="Поширені причини помилки КЕП: прострочений сертифікат, неправильний формат...",
+            name="rag_search_articles",
+            input_parameters={"query": "prozorro-eds бібліотека методи TypeScript"},
+            output="Статті про prozorro-eds: методи ініціалізації та підпису документів...",
         ),
         ToolCall(
-            name="web_search",
-            input_parameters={
-                "query": "помилка КЕП Prozorro майданчик 2024 вирішення",
-                "allowed_domains": ["prozorro.gov.ua", "me.gov.ua", "ips.vdz.ua"],
-            },
-            output="Оновлені інструкції щодо усунення помилок КЕП в ЕСЗ (2024)...",
+            name="github_repo_search",
+            input_parameters={"query": "prozorro-eds public methods API"},
+            output=(
+                "---\nРепозиторій: ProzorroUKR/prozorro-eds\nФайл: README.md\n"
+                "ProzorroEds.init() — initialize the library\n"
+                "Джерело: https://github.com/ProzorroUKR/prozorro-eds/blob/master/README.md"
+            ),
         ),
     ]
     expected_tools = [
         ToolCall(
-            name="rag_search",
-            input_parameters={
-                "query": "помилка КЕП подання пропозиції майданчик ЕСЗ",
-                "collection": "articles",
-            },
-            output="Поширені причини помилки КЕП...",
+            name="rag_search_articles",
+            input_parameters={"query": "prozorro-eds бібліотека методи TypeScript"},
+            output="Статті про prozorro-eds...",
         ),
         ToolCall(
-            name="web_search",
-            input_parameters={
-                "query": "помилка КЕП Prozorro майданчик 2024 вирішення",
-                "allowed_domains": ["prozorro.gov.ua", "me.gov.ua", "ips.vdz.ua"],
-            },
-            output="Оновлені інструкції...",
+            name="github_repo_search",
+            input_parameters={"query": "prozorro-eds public methods API"},
+            output="README.md, ProzorroEds.init()...",
         ),
     ]
     test_case = LLMTestCase(
-        input="Майданчик повертає помилку при поданні КЕП. Як виправити?",
+        input="Які публічні методи має бібліотека prozorro-eds?",
         actual_output=(
-            "Для виправлення помилки КЕП перевірте: термін дії сертифіката, "
-            "формат файлу підпису (.p7s), очистіть кеш браузера і повторіть."
+            "Бібліотека prozorro-eds надає такі публічні методи: "
+            "ProzorroEds.init() — ініціалізація, ProzorroEds.sign() — підписання документів, "
+            "ProzorroEds.verify() — верифікація підпису."
         ),
         tools_called=tools_called,
         expected_tools=expected_tools,
