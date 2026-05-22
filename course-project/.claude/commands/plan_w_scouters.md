@@ -40,12 +40,15 @@ TOTAL_FAST_SCOUT_SUBAGENTS: 5
 
 This is a Python LangGraph multi-agent system for Ukrainian public-procurement (ЕСЗ / Prozorro) support. Architecture: **Orchestrator-Workers + Evaluator-Optimizer**. Source of truth: `README.md` (in Ukrainian) + `CLAUDE.md`. When planning features, ALWAYS address these decisions:
 
-### Module Layout (root-level Python modules)
-- `agent.py` — LangGraph graph wiring (Supervisor / Planner / Lawyer / Common Support / Technical Support / Critic / Escalation nodes)
+### Module Layout
+- `supervisor.py` — LangGraph graph wiring (Supervisor + node functions: planner, fan_out_dispatcher, aggregate_responses, targeted_redispatcher, off_topic, final_response). `build_graph(checkpointer)` returns the compiled graph.
+- `agents/{planner,lawyer,common_support,technical_support,critic,escalation}.py` — one node per file
 - `schemas.py` — Pydantic contracts: `ResearchPlan`, `SubTask`, `WorkerResponse`, `CritiqueResult`, `EscalationOutput`
-- `retriever.py` — hybrid retrieval (semantic + BM25 + cross-encoder rerank); two collections: `laws`, `articles`
-- `ingest.py` — JSONL → vector store
-- `tools.py` — `web_search` (Tavily UA), `read_url`, `knowledge_search`, `write_report`
+- `retrieval/{retriever,embeddings,qdrant_client}.py` — hybrid retrieval (semantic + BM25 + cross-encoder rerank); two collections: `laws`, `articles`
+- `tools/{rag,web_search,slack_publisher,confluence_search,github_repo_search}.py` — per-tool modules
+- `ingest/{run_ingest,pipeline,chunkers}.py` — JSONL → vector store (entry: `python -m ingest.run_ingest`)
+- `final_response.py` — aggregator: `WorkerResponse[]` → sectioned answer
+- `language.py` — Ukrainian language utilities
 - `config.py` — Pydantic `Settings` (`BaseSettings`) loaded from `.env`
 - `main.py` — REPL entry
 - `prompts/` — backup copy (Langfuse Prompt Management is the runtime source)
@@ -69,20 +72,21 @@ Extend `Settings` in `config.py` for any new env keys (Tavily, Postgres, Slack, 
 1. **Schemas** — extend `schemas.py` first (downstream nodes depend on these)
 2. **Config** — extend `Settings` for new env keys
 3. **Tool / retriever / agent node** — implement node function (state in → state delta out)
-4. **Graph wiring** — update `agent.py` edges
+4. **Graph wiring** — update `supervisor.py` edges
 5. **Prompts** — update `prompts/<agent>.md` AND Langfuse
 6. **Data pipeline** — only if re-ingestion required (mention in plan)
-7. **Tests** — `tests/` for unit, `tests/eval/` for deepeval LLM evals
+7. **Tests** — `tests/` for unit, `tests/evaluations/` for deepeval LLM evals
 8. **Validation** — run commands below
 
 ### Project Validation Commands
 ```bash
-python -m py_compile agent.py ingest.py retriever.py tools.py main.py config.py  # syntax check
-python -c "from agent import agent; print(type(agent))"                          # graph imports cleanly
-pytest tests/ -q                                                                  # unit tests
-deepeval test run tests/eval/                                                     # LLM evaluation
-python ingest.py                                                                 # rebuild index (only if data/ or chunking changed)
-docker compose up -d && python scripts/export_infobox_db.py --output-dir data/infobox && docker compose down  # infobox refresh
+python -m py_compile config.py schemas.py supervisor.py final_response.py language.py main.py  # syntax check (root modules)
+python -m compileall -q agents tools ingest retrieval                                           # syntax check (packages)
+python -c "from supervisor import build_graph; print(build_graph)"                              # graph imports cleanly
+pytest tests/ -q                                                                                # unit tests
+deepeval test run tests/evaluations/                                                            # LLM evaluation
+python -m ingest.run_ingest --collection=all                                                    # rebuild index (only if data/ or chunking changed)
+docker compose -f docker-compose.ingest.yml up -d && python scripts/export_infobox_db.py --output-dir data/infobox && docker compose -f docker-compose.ingest.yml down  # infobox refresh
 ```
 
 ## The Iron Law
@@ -242,9 +246,9 @@ Execute these commands to validate the task is complete:
 
 <list specific commands to validate the work. Be precise about what to run>
 - Example: `pytest tests/test_planner.py -q`
-- Example: `deepeval test run tests/eval/test_critic.py`
-- Example: `python -c "from agent import agent; print(type(agent))"`
-- Example: `python ingest.py` (if data/ or chunking changed)
+- Example: `deepeval test run tests/evaluations/test_eval_geval.py`
+- Example: `python -c "from supervisor import build_graph; print(build_graph)"`
+- Example: `python -m ingest.run_ingest --collection=all` (if data/ or chunking changed)
 
 ## Notes
 <optional additional context, considerations, or dependencies. If new libraries are needed, install with `pip install <pkg>` and add the pinned version to `requirements.txt`.>

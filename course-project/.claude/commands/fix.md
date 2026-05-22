@@ -50,11 +50,12 @@ This is a Python LangGraph multi-agent system for Ukrainian public-procurement (
 
 ### Validation Commands
 ```bash
-python -m py_compile agent.py ingest.py retriever.py tools.py main.py config.py  # syntax check
-python -c "from agent import agent; print(type(agent))"                          # graph imports cleanly
-pytest tests/ -q                                                                  # unit tests
-deepeval test run tests/eval/                                                     # LLM evaluation
-python ingest.py                                                                 # only if ingestion / chunking changed
+python -m py_compile config.py schemas.py supervisor.py final_response.py language.py main.py  # syntax check (root modules)
+python -m compileall -q agents tools ingest retrieval                                           # syntax check (packages)
+python -c "from supervisor import build_graph; print(build_graph)"                              # graph imports cleanly
+pytest tests/ -q                                                                                # unit tests
+deepeval test run tests/evaluations/                                                            # LLM evaluation
+python -m ingest.run_ingest --collection=all                                                    # only if ingestion / chunking changed
 ```
 
 ## The Iron Law

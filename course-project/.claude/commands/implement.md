@@ -18,12 +18,15 @@ Follow the `Workflow` to implement the `PATH_TO_PLAN` then `Report` the complete
 
 This is a Python LangGraph multi-agent system for Ukrainian public procurement (ЕСЗ / Prozorro) support. Architecture is **Orchestrator-Workers + Evaluator-Optimizer** (Anthropic). Read `README.md` and `CLAUDE.md` for the binding design.
 
-### Module Layout (root-level modules)
-- `agent.py` — LangGraph graph wiring (Supervisor / Planner / workers / Critic / Escalation nodes)
+### Module Layout
+- `supervisor.py` — LangGraph graph wiring (Supervisor + node functions). Compile entry: `build_graph(checkpointer)`.
+- `agents/{planner,lawyer,common_support,technical_support,critic,escalation}.py` — one node per file
 - `schemas.py` — Pydantic contracts (`ResearchPlan`, `SubTask`, `WorkerResponse`, `CritiqueResult`, `EscalationOutput`)
-- `retriever.py` — hybrid retrieval (semantic + BM25 + cross-encoder rerank); two collections: `laws` and `articles`
-- `ingest.py` — JSONL → vector store ingestion
-- `tools.py` — `web_search` (Tavily UA), `read_url`, `knowledge_search`, `write_report`
+- `retrieval/{retriever,embeddings,qdrant_client}.py` — hybrid retrieval (semantic + BM25 + cross-encoder rerank); two collections: `laws` and `articles`
+- `ingest/{run_ingest,pipeline,chunkers}.py` — JSONL → vector store ingestion. Entry: `python -m ingest.run_ingest`.
+- `tools/{rag,web_search,slack_publisher,confluence_search,github_repo_search}.py` — per-tool modules
+- `final_response.py` — aggregator: `WorkerResponse[]` → sectioned answer
+- `language.py` — Ukrainian language utilities
 - `config.py` — Pydantic `BaseSettings` from `.env` (extend, don't fork)
 - `main.py` — REPL entry point
 - `prompts/` — backup copy of agent prompts (Langfuse Prompt Management is the runtime source)
@@ -52,26 +55,27 @@ This is a Python LangGraph multi-agent system for Ukrainian public procurement (
 1. **Schemas** — Add or extend Pydantic models in `schemas.py` first; downstream code depends on these.
 2. **Config** — Extend `Settings` in `config.py` with any new env keys (Tavily, Postgres, Slack, Langfuse, `CRITIC_MAX_RETRIES`, `WORKER_TIMEOUT_SECONDS`, `PLANNER_MAX_SUBTASKS`).
 3. **Tool / retriever / agent node** — Implement against the new schema. Keep node functions pure where possible (read state → return state delta).
-4. **Graph wiring** — Update `agent.py` to add the node and edges per the README flow.
+4. **Graph wiring** — Update `supervisor.py` to add the node and edges per the README flow.
 5. **Prompts** — Update `prompts/<agent>.md` (backup) AND push to Langfuse if the prompt has changed at runtime.
-6. **Data pipeline** — Only touch `scripts/` and `ingest.py` if the change requires re-ingesting; mention re-ingestion in the report.
-7. **Tests / eval** — Add unit tests in `tests/` and LLM evals in `tests/eval/` (create the directory if it doesn't exist).
+6. **Data pipeline** — Only touch `scripts/` and `ingest/` if the change requires re-ingesting; mention re-ingestion in the report.
+7. **Tests / eval** — Add unit tests in `tests/` and LLM evals in `tests/evaluations/`.
 8. **Validation** — Run the validation commands below.
 
 ### Validation Commands
 ```bash
-python -m py_compile agent.py ingest.py retriever.py tools.py main.py config.py  # syntax check
-python -c "from agent import agent; print(type(agent))"                          # graph imports cleanly
-python ingest.py                                                                 # rebuild index (only if data/ or chunking changed)
-pytest tests/ -q                                                                  # unit tests (create tests/ first if missing)
-deepeval test run tests/eval/                                                     # LLM evaluation (create tests/eval/ first if missing)
+python -m py_compile config.py schemas.py supervisor.py final_response.py language.py main.py  # syntax check (root modules)
+python -m compileall -q agents tools ingest retrieval                                           # syntax check (packages)
+python -c "from supervisor import build_graph; print(build_graph)"                              # graph imports cleanly
+python -m ingest.run_ingest --collection=all                                                    # rebuild index (only if data/ or chunking changed)
+pytest tests/ -q                                                                                # unit tests
+deepeval test run tests/evaluations/                                                            # LLM evaluation
 ```
 
 If your change touches the docker-backed data pipeline:
 ```bash
-docker compose up -d                                                              # start local-prozorro-db on :3306
+docker compose -f docker-compose.ingest.yml up -d                                # start local-prozorro-db on :3306
 python scripts/export_infobox_db.py --output-dir data/infobox
-docker compose down
+docker compose -f docker-compose.ingest.yml down
 ```
 
 ## The Iron Law

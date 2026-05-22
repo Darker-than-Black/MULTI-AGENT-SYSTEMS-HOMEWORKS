@@ -71,16 +71,17 @@ In addition to general code review, validate these LangGraph multi-agent system 
 - [ ] Prompts updated in BOTH `prompts/` (backup) AND Langfuse (runtime source) when prompt content changed?
 
 ### Data Pipeline
-- [ ] If chunking, embedding model, or JSONL schema changed: was re-ingestion (`python ingest.py`) considered/run?
+- [ ] If chunking, embedding model, or JSONL schema changed: was re-ingestion (`python -m ingest.run_ingest --collection=all`) considered/run?
 - [ ] `scripts/create_procurement_law_dataset.py` chunk size still ~2000 chars (BGE-M3 / multilingual-e5 512-token headroom)?
 - [ ] No commits of `prozorro_backup.sql` or other large/sensitive dumps?
 
 ### Validation Commands (run during review)
 ```bash
-python -m py_compile agent.py ingest.py retriever.py tools.py main.py config.py
-python -c "from agent import agent; print(type(agent))"
+python -m py_compile config.py schemas.py supervisor.py final_response.py language.py main.py
+python -m compileall -q agents tools ingest retrieval
+python -c "from supervisor import build_graph; print(build_graph)"
 pytest tests/ -q
-deepeval test run tests/eval/
+deepeval test run tests/evaluations/
 ```
 
 ### Common Anti-Patterns (MUST NOT exist)

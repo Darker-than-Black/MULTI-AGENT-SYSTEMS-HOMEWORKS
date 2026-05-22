@@ -31,7 +31,7 @@ PLAN_OUTPUT_DIRECTORY: `specs/`
 - Include code examples or pseudo-code where appropriate to clarify complex concepts
 - Consider edge cases, error handling, and scalability concerns
 - Structure the document with clear sections and proper markdown formatting
-- **Project-specific**: This is a Python LangGraph multi-agent system for Ukrainian public-procurement (ЕСЗ / Prozorro) support. Source of truth: `README.md` (in Ukrainian) + `CLAUDE.md`. Root-level modules: `agent.py` (graph wiring), `schemas.py` (Pydantic contracts: `ResearchPlan`, `SubTask`, `WorkerResponse`, `CritiqueResult`, `EscalationOutput`), `retriever.py` (hybrid retrieval over `laws` + `articles` collections), `ingest.py`, `tools.py` (Tavily UA web search, knowledge_search), `config.py` (Pydantic `Settings` from `.env`), `main.py` (REPL). Preserve invariants: three-domain scope (`technical_system` / `procurement_general` / `legal`), defense-in-depth off-topic filtering, two separate RAG collections, Critic targeted-`revise` loop, two escalation paths (Planner `needs_human=true` OR Critic exhaust → `EscalationOutput` to Slack + audit-trail). Prompts live in Langfuse at runtime; `prompts/` is a backup.
+- **Project-specific**: This is a Python LangGraph multi-agent system for Ukrainian public-procurement (ЕСЗ / Prozorro) support. Source of truth: `README.md` (in Ukrainian) + `CLAUDE.md`. Modules: `supervisor.py` (graph wiring; `build_graph(checkpointer)`), `agents/{planner,lawyer,common_support,technical_support,critic,escalation}.py`, `schemas.py` (Pydantic contracts: `ResearchPlan`, `SubTask`, `WorkerResponse`, `CritiqueResult`, `EscalationOutput`), `retrieval/{retriever,embeddings,qdrant_client}.py` (hybrid retrieval over `laws` + `articles` collections), `ingest/{run_ingest,pipeline,chunkers}.py`, `tools/{rag,web_search,slack_publisher,confluence_search,github_repo_search}.py`, `final_response.py` (aggregator), `language.py`, `config.py` (Pydantic `Settings` from `.env`), `main.py` (REPL). Preserve invariants: three-domain scope (`technical_system` / `procurement_general` / `legal`), defense-in-depth off-topic filtering, two separate RAG collections, Critic targeted-`revise` loop, two escalation paths (Planner `needs_human=true` OR Critic exhaust → `EscalationOutput` to Slack + audit-trail). Prompts live in Langfuse at runtime; `prompts/` is a backup.
 
 ## Workflow
 
@@ -120,11 +120,12 @@ IMPORTANT: Execute every step in order, top to bottom. Each task should be a che
 Execute these commands to validate the task is complete:
 
 <list specific commands to validate the work. Be precise about what to run>
-- `python -m py_compile agent.py ingest.py retriever.py tools.py main.py config.py` — syntax check
-- `python -c "from agent import agent; print(type(agent))"` — graph imports cleanly
+- `python -m py_compile config.py schemas.py supervisor.py final_response.py language.py main.py` — syntax check (root modules)
+- `python -m compileall -q agents tools ingest retrieval` — syntax check (packages)
+- `python -c "from supervisor import build_graph; print(build_graph)"` — graph imports cleanly
 - `pytest tests/ -q` — unit tests
-- `deepeval test run tests/eval/` — LLM evaluation
-- `python ingest.py` — rebuild index (only if `data/` or chunking changed)
+- `deepeval test run tests/evaluations/` — LLM evaluation
+- `python -m ingest.run_ingest --collection=all` — rebuild index (only if `data/` or chunking changed)
 
 ## Notes
 <optional additional context, considerations, or dependencies. If new libraries are needed, install with `pip install <pkg>` and add the pinned version to `requirements.txt`.>
