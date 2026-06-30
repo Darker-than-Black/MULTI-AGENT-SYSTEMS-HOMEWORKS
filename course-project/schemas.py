@@ -50,6 +50,10 @@ class ResearchPlan(BaseModel):
     subtasks: list[SubTask] = Field(default_factory=list)
     needs_human: bool = False
     escalation_reason: str | None = None
+    # Normalized per-topic lexical scores from the Planner pre-scorer
+    # (agents.keyword_router). Empty when routing is disabled or no phrase
+    # in data/agent_routing_dictionaries_uk_en.json matched the query.
+    keyword_signals: dict[str, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_consistency(self) -> "ResearchPlan":

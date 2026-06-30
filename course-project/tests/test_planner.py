@@ -12,6 +12,7 @@ from schemas import ResearchPlan, SubTask
 class StaticPlanRunnable(Runnable[Any, ResearchPlan]):
     def __init__(self, plan: ResearchPlan) -> None:
         self.plan = plan
+        self.last_input: Any = None
 
     def invoke(
         self,
@@ -19,6 +20,7 @@ class StaticPlanRunnable(Runnable[Any, ResearchPlan]):
         config: Any | None = None,
         **kwargs: Any,
     ) -> ResearchPlan:
+        self.last_input = input
         return self.plan
 
 
@@ -26,10 +28,12 @@ class FakeStructuredLLM:
     def __init__(self, plan: ResearchPlan) -> None:
         self.plan = plan
         self.schema = None
+        self.runnable: StaticPlanRunnable | None = None
 
     def with_structured_output(self, schema: type[ResearchPlan]) -> StaticPlanRunnable:
         self.schema = schema
-        return StaticPlanRunnable(self.plan)
+        self.runnable = StaticPlanRunnable(self.plan)
+        return self.runnable
 
 
 def _plan(
@@ -69,6 +73,15 @@ def patch_planner_llm(monkeypatch: pytest.MonkeyPatch):
         return fake_llm
 
     return _patch
+
+
+@pytest.fixture(autouse=True)
+def _disable_keyword_routing_by_default(monkeypatch: pytest.MonkeyPatch):
+    """Pre-existing planner tests assert plan equality without keyword_signals.
+    Tests that exercise the keyword router re-enable the toggle themselves."""
+    from config import settings
+
+    monkeypatch.setattr(settings, "planner_keyword_routing_enabled", False)
 
 
 def test_planner_returns_research_plan_instance(patch_planner_llm) -> None:
@@ -270,3 +283,125 @@ def test_planner_clears_subtasks_for_direct_escalation(patch_planner_llm) -> Non
 
     assert result.needs_human is True
     assert result.subtasks == []
+
+
+# ---------------------------------------------------------------------------
+# Keyword routing integration
+# ---------------------------------------------------------------------------
+
+
+_PROMPT_TEMPLATE = (
+    "SYSTEM: planner test template\n"
+    "MAX=__PLANNER_MAX_SUBTASKS__\n"
+    "SIGNALS_START\n"
+    "__KEYWORD_SIGNALS__\n"
+    "SIGNALS_END\n"
+)
+
+
+@pytest.fixture
+def patch_planner_prompt(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "agents.planner.load_prompt",
+        lambda *args, **kwargs: _PROMPT_TEMPLATE,
+    )
+
+
+def test_load_system_prompt_substitutes_keyword_signals(
+    patch_planner_prompt,
+) -> None:
+    prompt = _load_system_prompt("BLOCK_X")
+
+    assert "__KEYWORD_SIGNALS__" not in prompt
+    assert "SIGNALS_START\nBLOCK_X\nSIGNALS_END" in prompt
+
+
+def test_load_system_prompt_empty_signals_collapse_placeholder(
+    patch_planner_prompt,
+) -> None:
+    prompt = _load_system_prompt("")
+
+    assert "__KEYWORD_SIGNALS__" not in prompt
+    assert "SIGNALS_START\n\nSIGNALS_END" in prompt
+
+
+def test_invoke_planner_attaches_keyword_signals(
+    patch_planner_llm, patch_planner_prompt, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_signals = {
+        "raw_scores": {"legal": 2.0, "procurement_general": 0.0, "technical_system": 1.0},
+        "normalized_scores": {
+            "legal": 2 / 3,
+            "procurement_general": 0.0,
+            "technical_system": 1 / 3,
+        },
+        "top_matches": {
+            "legal": ["стаття 17"],
+            "procurement_general": [],
+            "technical_system": ["КЕП"],
+        },
+    }
+    monkeypatch.setattr(
+        "agents.planner.keyword_router.score_query", lambda q: fake_signals
+    )
+
+    plan = _plan(query="Стаття 17 і КЕП", topic="legal")
+    patch_planner_llm(plan)
+
+    result = invoke_planner("Стаття 17 і КЕП")
+
+    assert result.keyword_signals == fake_signals["normalized_scores"]
+
+
+def test_invoke_planner_passes_signals_block_to_prompt(
+    patch_planner_llm, patch_planner_prompt, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_signals = {
+        "raw_scores": {"legal": 2.0, "procurement_general": 0.0, "technical_system": 0.0},
+        "normalized_scores": {
+            "legal": 1.0,
+            "procurement_general": 0.0,
+            "technical_system": 0.0,
+        },
+        "top_matches": {
+            "legal": ["стаття 17"],
+            "procurement_general": [],
+            "technical_system": [],
+        },
+    }
+    monkeypatch.setattr(
+        "agents.planner.keyword_router.score_query", lambda q: fake_signals
+    )
+
+    plan = _plan(query="Стаття 17", topic="legal")
+    fake_llm = patch_planner_llm(plan)
+
+    invoke_planner("Стаття 17")
+
+    assert fake_llm.runnable is not None
+    messages = fake_llm.runnable.last_input
+    system_content = messages[0].content
+    assert "Лексичні сигнали з користувацького запиту" in system_content
+    assert "«стаття 17»" in system_content
+    assert "- legal: 100%" in system_content
+
+
+def test_invoke_planner_with_toggle_off_passes_empty_block(
+    patch_planner_llm, patch_planner_prompt, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from config import settings
+
+    monkeypatch.setattr(settings, "planner_keyword_routing_enabled", False)
+
+    plan = _plan(query="Стаття 17", topic="legal")
+    fake_llm = patch_planner_llm(plan)
+
+    result = invoke_planner("Стаття 17")
+
+    assert fake_llm.runnable is not None
+    system_content = fake_llm.runnable.last_input[0].content
+    assert "Лексичні сигнали" not in system_content
+    assert "SIGNALS_START\n\nSIGNALS_END" in system_content
+    # Toggle off → planner does not pollute the schema with a zero dict;
+    # the field stays at its default empty mapping.
+    assert result.keyword_signals == {}
