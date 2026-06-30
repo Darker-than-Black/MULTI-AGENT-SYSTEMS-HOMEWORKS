@@ -135,6 +135,7 @@
 - [x] Output: `ResearchPlan` через `with_structured_output`
 - [x] **На цьому етапі обмежити `subtasks` максимум 1 елементом** — це single-topic фаза
 - [x] Окремі тести для off-topic, escalation, on-topic кейсів
+- [x] Keyword-routing hint (bilingual UK/EN): `agents/keyword_router.py` пре-скорить запит проти `data/agent_routing_dictionaries_uk_en.json`, інжектить блок у системний промпт через `__KEYWORD_SIGNALS__`, зберігає `normalized_scores` на `ResearchPlan.keyword_signals`. Перемикач `PLANNER_KEYWORD_ROUTING_ENABLED`. Тести: `tests/test_keyword_router.py` + інтеграційні в `tests/test_planner.py`
 
 ### 2.5 LangGraph: базовий граф (без fan-out, без Critic)
 - [x] `supervisor.py` — `build_graph()` з nodes: `planner`, `off_topic_response`, `lawyer`, `common_support`, `technical_support`, `final_response`

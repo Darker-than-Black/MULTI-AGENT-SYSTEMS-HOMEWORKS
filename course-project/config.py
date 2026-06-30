@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     worker_timeout_seconds: int = 60
     planner_max_subtasks: int = 3
 
+    # ── Planner keyword routing (pre-LLM lexical hint) ───────────────
+    routing_dictionaries_path: str = "data/agent_routing_dictionaries_uk_en.json"
+    planner_keyword_routing_enabled: bool = True
+    planner_keyword_official_weight: float = 1.0
+    planner_keyword_slang_weight: float = 0.7
+    planner_keyword_top_matches: int = 3
+
     # ── Observability (Langfuse) ──────────────────────────────────────
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None

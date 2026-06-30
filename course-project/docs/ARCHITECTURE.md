@@ -292,7 +292,7 @@ START
 
 | Node | Input | Output | LLM-виклик? |
 |---|---|---|---|
-| `planner_node` | `user_message`, `session_id` | `plan: ResearchPlan` | Так (structured output) |
+| `planner_node` | `user_message`, `session_id` | `plan: ResearchPlan` | Так (structured output). Перед LLM-викликом виконується детермінований лексичний пре-скоринг (`agents/keyword_router.py`) проти `data/agent_routing_dictionaries_uk_en.json` — нормалізовані scores інжектяться у системний промпт через placeholder `__KEYWORD_SIGNALS__` як *підказка, не директива* і зберігаються на `ResearchPlan.keyword_signals` для трейсингу. Defense-in-depth (Planner gate / system prompts агентів / Critic Structure) не змінюється. Вимикається перемикачем `PLANNER_KEYWORD_ROUTING_ENABLED`. |
 | `off_topic_response_node` | `plan.off_topic_reason` | `final_response` (статичний шаблон) | Ні |
 | `fan_out_dispatcher` | `plan.subtasks` | `Send` команди до workers | Ні (logic) |
 | `lawyer_node` | `SubTask` | `WorkerResponse` | Так (з RAG context) |
@@ -684,6 +684,13 @@ class Settings(BaseSettings):
     worker_timeout_seconds: int = 60
     planner_max_subtasks: int = 3
 
+    # Planner keyword routing (pre-LLM lexical hint)
+    routing_dictionaries_path: str = "data/agent_routing_dictionaries_uk_en.json"
+    planner_keyword_routing_enabled: bool = True
+    planner_keyword_official_weight: float = 1.0
+    planner_keyword_slang_weight: float = 0.7
+    planner_keyword_top_matches: int = 3
+
     # Observability
     langfuse_public_key: str
     langfuse_secret_key: str
@@ -820,3 +827,4 @@ services:
 | 11 | Library-first development | Власна реалізація для контролю | Менше підтримки, кращий fit з ecosystem'ом, швидше до результату; стек обрано саме за повноту фіч |
 | 12 | Confluence Cloud як третє джерело знань для Technical Support | Інгестація сторінок Confluence у колекцію `articles` Qdrant | Live search зберігає актуальність без re-ingest; інгестація вимагала б окремого пайплайну синхронізації та ризикувала би застарілими даними. Інструмент env-gated — агент функціонує без Confluence credentials |
 | 13 | GitHub Search API як окремий інструмент `github_repo_search` для репозиторіїв | Tavily `include_domains` з repo-path рядками | Tavily domain filtering — хост-рівень, не repo-рівень; GitHub Code Search API надає точний пошук по коду й документації у визначеному списку репозиторіїв. `TECH_SUPPORT_ALLOWED_DOMAINS` — лише bare hostnames для Tavily. Інструмент env-gated через `TECH_SUPPORT_GITHUB_REPOS` — агент функціонує без GitHub credentials |
+| 14 | Keyword-routing hint для Planner як *підказка*, не як gate | Hard keyword routing замість LLM; пост-валідація вибору LLM проти словника | Hard routing втрачає семантичну гнучкість і multi-topic decomposition; пост-валідація карає LLM коли словник bias-нутий. Pre-scoring + інжект у промпт зберігає авторитет LLM, але дає детерміновані лексичні докази. Ablation одним env-перемикачем |
